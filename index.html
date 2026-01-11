@@ -54,9 +54,10 @@
       <button id="zenClose" class="zen-close" aria-label="Cerrar">✕</button>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=10"></script>
     <script>
-      if ("serviceWorker" in navigator && location.protocol === "https:") {
+      const isGitHubPages = location.hostname.endsWith("github.io");
+      if (!isGitHubPages && "serviceWorker" in navigator && location.protocol === "https:") {
         navigator.serviceWorker.register("service-worker.js");
       }
     </script>
