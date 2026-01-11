@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0f1412" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" href="icons/icon-192.png" />
+    <title>BibleApp PWA</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">BibleApp</p>
+          <h1>Versiculos vivos, lectura plena.</h1>
+          <p class="subtitle">Busqueda rapida, lectura plena y referencias destacadas.</p>
+        </div>
+      </header>
+
+      <section class="card search">
+        <div class="field">
+          <label for="query">Referencia</label>
+          <input id="query" type="text" placeholder="Juan 3:16" />
+        </div>
+        <div class="field">
+          <label for="version">Version</label>
+          <select id="version"></select>
+        </div>
+        <div class="actions">
+          <button id="searchBtn">Buscar</button>
+          <button id="prevBtn" class="ghost">Anterior</button>
+          <button id="nextBtn" class="ghost">Siguiente</button>
+          <button id="zenBtn" class="ghost">Lectura plena</button>
+        </div>
+      </section>
+
+      <section class="card output">
+        <div id="status" class="status">Ingresa una referencia para buscar.</div>
+        <div id="result" class="result" hidden>
+          <p id="verseText" class="verse"></p>
+          <p id="reference" class="reference"></p>
+        </div>
+      </section>
+
+    </main>
+
+    <div id="zenOverlay" class="zen" hidden>
+      <div class="zen-content">
+        <p id="zenText"></p>
+        <p id="zenRef"></p>
+      </div>
+      <button id="zenClose" class="zen-close" aria-label="Cerrar">✕</button>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+      if ("serviceWorker" in navigator && location.protocol === "https:") {
+        navigator.serviceWorker.register("service-worker.js");
+      }
+    </script>
+  </body>
+</html>
