@@ -144,13 +144,24 @@ async function fetchVerse() {
   const search = `${parsed.book} ${parsed.chapter}:${parsed.verseStart}`;
   const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(search)}&version=${version}`;
 
-  const proxyBase = getProxyBase();
-  const fetchUrl = `${proxyBase}${encodeURIComponent(url)}`;
+  const fetchUrls = buildFetchUrls(url);
 
   showStatus("Buscando...", false);
   try {
-    const response = await fetch(fetchUrl);
-    const html = await response.text();
+    let html = "";
+    for (const fetchUrl of fetchUrls) {
+      const response = await fetch(fetchUrl);
+      if (!response.ok) continue;
+      const text = await response.text();
+      if (text && text.length > 500) {
+        html = text;
+        break;
+      }
+    }
+    if (!html) {
+      showStatus("No se pudo obtener contenido del servidor.", true);
+      return;
+    }
     const verseText = parseHTML(html, parsed);
     if (!verseText) {
       showStatus("No se pudo extraer el versiculo.", true);
@@ -246,6 +257,13 @@ document.addEventListener("keydown", (event) => {
 });
 
 initVersions();
-function getProxyBase() {
-  return `${location.origin}/proxy?url=`;
+function buildFetchUrls(url) {
+  if (location.hostname.endsWith("github.io")) {
+    return [
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      `https://corsproxy.io/?${encodeURIComponent(url)}`,
+      `https://thingproxy.freeboard.io/fetch/${url}`
+    ];
+  }
+  return [`${location.origin}/proxy?url=${encodeURIComponent(url)}`];
 }
