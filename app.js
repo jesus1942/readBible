@@ -304,13 +304,13 @@ function shareVerseAsPng() {
   ctx.fillRect(0, 0, width, height);
 
   ctx.fillStyle = "#fff7e6";
-  ctx.font = "600 36px 'Cormorant Garamond', serif";
-  const lines = wrapText(ctx, text, 80, 140, width - 160, 46);
+  ctx.font = "600 38px 'Cormorant Garamond', serif";
+  const lines = wrapTextCentered(ctx, text, width, 140, width - 160, 48);
 
   ctx.fillStyle = "#f39c12";
-  ctx.font = "italic 26px 'Cormorant Garamond', serif";
-  const refY = Math.min(height - 120, 140 + lines.length * 46 + 40);
-  ctx.fillText(reference, 80, refY);
+  ctx.font = "italic 28px 'Cormorant Garamond', serif";
+  const refY = Math.min(height - 120, 140 + lines.length * 48 + 40);
+  drawCenteredText(ctx, reference, width, refY);
 
   canvas.toBlob(async (blob) => {
     if (!blob) return;
@@ -334,7 +334,7 @@ function shareVerseAsPng() {
   }, "image/png");
 }
 
-function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+function wrapTextCentered(ctx, text, totalWidth, y, maxWidth, lineHeight) {
   const words = text.split(" ");
   let line = "";
   let lines = 0;
@@ -342,7 +342,7 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     const testLine = line + words[i] + " ";
     const metrics = ctx.measureText(testLine);
     if (metrics.width > maxWidth && i > 0) {
-      ctx.fillText(line.trim(), x, y + lines * lineHeight);
+      drawCenteredText(ctx, line.trim(), totalWidth, y + lines * lineHeight);
       line = words[i] + " ";
       lines += 1;
     } else {
@@ -350,10 +350,16 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     }
   }
   if (line.trim()) {
-    ctx.fillText(line.trim(), x, y + lines * lineHeight);
+    drawCenteredText(ctx, line.trim(), totalWidth, y + lines * lineHeight);
     lines += 1;
   }
   return new Array(lines);
+}
+
+function drawCenteredText(ctx, text, totalWidth, y) {
+  const metrics = ctx.measureText(text);
+  const x = (totalWidth - metrics.width) / 2;
+  ctx.fillText(text, x, y);
 }
 
 function buildCacheKey(parsed, version) {
