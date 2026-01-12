@@ -183,6 +183,63 @@ button {
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
 }
 
+.splash {
+  position: fixed;
+  inset: 0;
+  background: #1a120c;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 1000;
+}
+
+.splash[hidden] {
+  display: none !important;
+}
+
+.splash-card {
+  max-width: 640px;
+  background: #23180f;
+  border: 1px solid #3b2a19;
+  border-radius: 20px;
+  padding: 28px;
+  text-align: center;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
+}
+
+.splash-verse {
+  font-size: 22px;
+  line-height: 1.6;
+  color: #fff7e6;
+  margin: 8px 0 12px;
+}
+
+.splash-ref {
+  color: var(--accent);
+  font-style: italic;
+  margin-bottom: 20px;
+}
+
+.splash-divider {
+  height: 1px;
+  background: #3b2a19;
+  margin: 16px 0;
+}
+
+.splash-efemeride {
+  color: #f3e6d2;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.splash-hint {
+  margin-top: 18px;
+  color: #bfa988;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 @media (max-width: 640px) {
   h1 {
     font-size: 24px;

@@ -41,6 +41,10 @@ const zenOverlay = document.getElementById("zenOverlay");
 const zenText = document.getElementById("zenText");
 const zenRef = document.getElementById("zenRef");
 const zenClose = document.getElementById("zenClose");
+const splash = document.getElementById("splash");
+const splashVerse = document.getElementById("splashVerse");
+const splashRef = document.getElementById("splashRef");
+const splashEfemeride = document.getElementById("splashEfemeride");
 let touchStartX = 0;
 let touchStartY = 0;
 let isZenOpen = false;
@@ -272,6 +276,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 initVersions();
+initSplash();
 function buildFetchUrls(url) {
   if (location.hostname.endsWith("github.io")) {
     return [
@@ -281,6 +286,43 @@ function buildFetchUrls(url) {
     ];
   }
   return [`${location.origin}/proxy?url=${encodeURIComponent(url)}`];
+}
+
+async function initSplash() {
+  try {
+    const verses = await fetchJson("daily_verses.json");
+    const efemerides = await fetchJson("efemerides.json");
+    const dayIndex = dayOfYearIndex();
+    const verse = verses[dayIndex % verses.length];
+    const efemeride = efemerides[dayIndex % efemerides.length];
+    splashVerse.textContent = verse.text;
+    splashRef.textContent = `— ${verse.reference}`;
+    splashEfemeride.textContent = efemeride;
+    splash.hidden = false;
+    const timer = setTimeout(() => closeSplash(), 60000);
+    splash.addEventListener("click", () => closeSplash(timer), { once: true });
+    splash.addEventListener("touchstart", () => closeSplash(timer), { once: true });
+  } catch {
+    // ignore splash errors
+  }
+}
+
+function closeSplash(timer) {
+  if (timer) clearTimeout(timer);
+  splash.hidden = true;
+}
+
+async function fetchJson(path) {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error("fetch failed");
+  return response.json();
+}
+
+function dayOfYearIndex() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const diff = now - start;
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
 function shareVerseAsPng() {

@@ -54,7 +54,19 @@
       <button id="zenClose" class="zen-close" aria-label="Cerrar">✕</button>
     </div>
 
-    <script src="app.js?v=10"></script>
+    <div id="splash" class="splash" hidden>
+      <div class="splash-card">
+        <p class="eyebrow">Versiculo del dia</p>
+        <p id="splashVerse" class="splash-verse"></p>
+        <p id="splashRef" class="splash-ref"></p>
+        <div class="splash-divider"></div>
+        <p class="eyebrow">Efemeride cristiana</p>
+        <p id="splashEfemeride" class="splash-efemeride"></p>
+        <p class="splash-hint">Toca para continuar</p>
+      </div>
+    </div>
+
+    <script src="app.js?v=11"></script>
     <script>
       const isGitHubPages = location.hostname.endsWith("github.io");
       if (!isGitHubPages && "serviceWorker" in navigator && location.protocol === "https:") {
