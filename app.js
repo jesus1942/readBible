@@ -3,6 +3,8 @@ const versions = [
   "NBD", "BLPH", "JBS", "PDT", "NTV", "RVR2000", "NBLA"
 ];
 
+const CACHE_TTL_MS = 1000 * 60 * 60 * 24;
+
 const unwantedTexts = [
   "Read the Bible", "Leer la Biblia",
   "StudyTools", "Herramientas",
@@ -144,6 +146,12 @@ async function fetchVerse() {
   const search = `${parsed.book} ${parsed.chapter}:${parsed.verseStart}`;
   const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(search)}&version=${version}`;
 
+  const cacheKey = buildCacheKey(parsed, version);
+  const cached = readCache(cacheKey);
+  if (cached) {
+    showResult(cached.text, cached.reference);
+    return;
+  }
   const fetchUrls = buildFetchUrls(url);
 
   showStatus("Buscando...", false);
@@ -168,6 +176,7 @@ async function fetchVerse() {
       return;
     }
     const reference = buildReference(parsed.book, parsed.chapter, parsed.verseStart, parsed.verseEnd, version);
+    writeCache(cacheKey, { text: verseText, reference });
     showResult(verseText, reference);
   } catch (err) {
     showStatus("Error de red al conectar con el servidor local.", true);
@@ -266,4 +275,31 @@ function buildFetchUrls(url) {
     ];
   }
   return [`${location.origin}/proxy?url=${encodeURIComponent(url)}`];
+}
+
+function buildCacheKey(parsed, version) {
+  return `verse:${parsed.book}:${parsed.chapter}:${parsed.verseStart}-${parsed.verseEnd}:${version}`;
+}
+
+function readCache(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (Date.now() - data.ts > CACHE_TTL_MS) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return data.value;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ ts: Date.now(), value }));
+  } catch {
+    // ignore cache failures
+  }
 }
