@@ -261,6 +261,14 @@ button {
   text-transform: uppercase;
 }
 
+.footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 6px 8px 0;
+}
+
 @media (max-width: 640px) {
   h1 {
     font-size: 24px;
