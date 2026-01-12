@@ -205,6 +205,27 @@ button {
   padding: 28px;
   text-align: center;
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+.splash-card::before,
+.splash-card::after {
+  content: "";
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #b9915b, transparent);
+  opacity: 0.7;
+}
+
+.splash-card::before {
+  top: 16px;
+}
+
+.splash-card::after {
+  bottom: 16px;
 }
 
 .splash-verse {
