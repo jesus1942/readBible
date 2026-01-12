@@ -44,6 +44,7 @@ const zenClose = document.getElementById("zenClose");
 let touchStartX = 0;
 let touchStartY = 0;
 let isZenOpen = false;
+let lastShareAt = 0;
 
 function initVersions() {
   versions.forEach((v) => {
@@ -252,7 +253,12 @@ zenOverlay.addEventListener("touchstart", (event) => {
 zenOverlay.addEventListener("touchend", (event) => {
   const dx = event.changedTouches[0].clientX - touchStartX;
   const dy = event.changedTouches[0].clientY - touchStartY;
-  if (Math.abs(dx) < 30 || Math.abs(dx) < Math.abs(dy)) return;
+  if (Math.abs(dx) < 30 || Math.abs(dx) < Math.abs(dy)) {
+    if (dy < -80) {
+      shareVerseAsPng();
+    }
+    return;
+  }
   if (dx > 0) {
     goPrev();
   } else {
@@ -275,6 +281,79 @@ function buildFetchUrls(url) {
     ];
   }
   return [`${location.origin}/proxy?url=${encodeURIComponent(url)}`];
+}
+
+function shareVerseAsPng() {
+  if (resultEl.hidden) return;
+  const now = Date.now();
+  if (now - lastShareAt < 2000) return;
+  lastShareAt = now;
+
+  const text = verseEl.textContent.trim();
+  const reference = refEl.textContent.trim();
+  const canvas = document.createElement("canvas");
+  const scale = 2;
+  const width = 1080;
+  const height = 1350;
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = "#1a120c";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "#fff7e6";
+  ctx.font = "600 36px 'Cormorant Garamond', serif";
+  const lines = wrapText(ctx, text, 80, 140, width - 160, 46);
+
+  ctx.fillStyle = "#f39c12";
+  ctx.font = "italic 26px 'Cormorant Garamond', serif";
+  const refY = Math.min(height - 120, 140 + lines.length * 46 + 40);
+  ctx.fillText(reference, 80, refY);
+
+  canvas.toBlob(async (blob) => {
+    if (!blob) return;
+    const file = new File([blob], "bibleapp.png", { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: "BibleApp" });
+        return;
+      } catch {
+        // fall back to download
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "bibleapp.png";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, "image/png");
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(" ");
+  let line = "";
+  let lines = 0;
+  for (let i = 0; i < words.length; i += 1) {
+    const testLine = line + words[i] + " ";
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth && i > 0) {
+      ctx.fillText(line.trim(), x, y + lines * lineHeight);
+      line = words[i] + " ";
+      lines += 1;
+    } else {
+      line = testLine;
+    }
+  }
+  if (line.trim()) {
+    ctx.fillText(line.trim(), x, y + lines * lineHeight);
+    lines += 1;
+  }
+  return new Array(lines);
 }
 
 function buildCacheKey(parsed, version) {
