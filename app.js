@@ -303,13 +303,25 @@ function shareVerseAsPng() {
   ctx.fillStyle = "#1a120c";
   ctx.fillRect(0, 0, width, height);
 
+  const lineHeight = 48;
+  const textSize = 38;
+  const refSize = 28;
+  const refGap = 40;
+  const refPaddingBottom = 120;
+
   ctx.fillStyle = "#fff7e6";
-  ctx.font = "600 38px 'Cormorant Garamond', serif";
-  const lines = wrapTextCentered(ctx, text, width, 140, width - 160, 48);
+  ctx.font = `600 ${textSize}px 'Cormorant Garamond', serif`;
+  const lines = wrapTextCentered(ctx, text, width, 0, width - 160, lineHeight);
+
+  const textBlockHeight = lines.length * lineHeight;
+  const refBlockHeight = refSize + refGap;
+  const totalBlockHeight = textBlockHeight + refBlockHeight;
+  const startY = Math.max(140, (height - totalBlockHeight - refPaddingBottom) / 2);
+  wrapTextCentered(ctx, text, width, startY, width - 160, lineHeight, true);
 
   ctx.fillStyle = "#f39c12";
-  ctx.font = "italic 28px 'Cormorant Garamond', serif";
-  const refY = Math.min(height - 120, 140 + lines.length * 48 + 40);
+  ctx.font = `italic ${refSize}px 'Cormorant Garamond', serif`;
+  const refY = Math.min(height - refPaddingBottom, startY + textBlockHeight + refGap);
   drawCenteredText(ctx, reference, width, refY);
 
   canvas.toBlob(async (blob) => {
@@ -334,7 +346,7 @@ function shareVerseAsPng() {
   }, "image/png");
 }
 
-function wrapTextCentered(ctx, text, totalWidth, y, maxWidth, lineHeight) {
+function wrapTextCentered(ctx, text, totalWidth, y, maxWidth, lineHeight, draw = false) {
   const words = text.split(" ");
   let line = "";
   let lines = 0;
@@ -342,7 +354,9 @@ function wrapTextCentered(ctx, text, totalWidth, y, maxWidth, lineHeight) {
     const testLine = line + words[i] + " ";
     const metrics = ctx.measureText(testLine);
     if (metrics.width > maxWidth && i > 0) {
-      drawCenteredText(ctx, line.trim(), totalWidth, y + lines * lineHeight);
+      if (draw) {
+        drawCenteredText(ctx, line.trim(), totalWidth, y + lines * lineHeight);
+      }
       line = words[i] + " ";
       lines += 1;
     } else {
@@ -350,7 +364,9 @@ function wrapTextCentered(ctx, text, totalWidth, y, maxWidth, lineHeight) {
     }
   }
   if (line.trim()) {
-    drawCenteredText(ctx, line.trim(), totalWidth, y + lines * lineHeight);
+    if (draw) {
+      drawCenteredText(ctx, line.trim(), totalWidth, y + lines * lineHeight);
+    }
     lines += 1;
   }
   return new Array(lines);
