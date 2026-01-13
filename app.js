@@ -309,14 +309,17 @@ restoreLastQuery();
 initNamePrompt();
 initSplash();
 function buildFetchUrls(url) {
+  const encoded = encodeURIComponent(url);
+  const urls = [
+    `${location.origin}/proxy?url=${encoded}`,
+    `https://api.allorigins.win/raw?url=${encoded}`,
+    `https://corsproxy.io/?${encoded}`,
+    `https://thingproxy.freeboard.io/fetch/${url}`
+  ];
   if (location.hostname.endsWith("github.io")) {
-    return [
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-      `https://corsproxy.io/?${encodeURIComponent(url)}`,
-      `https://thingproxy.freeboard.io/fetch/${url}`
-    ];
+    return urls.slice(1);
   }
-  return [`${location.origin}/proxy?url=${encodeURIComponent(url)}`];
+  return urls;
 }
 
 async function initSplash() {
