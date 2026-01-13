@@ -60,13 +60,22 @@
 
     <div id="splash" class="splash" hidden>
       <div class="splash-card">
-        <p class="eyebrow">Versiculo del dia</p>
+        <p id="splashGreeting" class="eyebrow">Versiculo del dia</p>
         <p id="splashVerse" class="splash-verse"></p>
         <p id="splashRef" class="splash-ref"></p>
         <div class="splash-divider"></div>
         <p class="eyebrow">Efemeride cristiana</p>
         <p id="splashEfemeride" class="splash-efemeride"></p>
         <p class="splash-hint">Toca para continuar</p>
+      </div>
+    </div>
+
+    <div id="namePrompt" class="name-prompt" hidden>
+      <div class="name-card">
+        <p class="eyebrow">Bienvenido</p>
+        <p class="name-title">Como te llamas?</p>
+        <input id="nameInput" type="text" maxlength="40" placeholder="Tu nombre" />
+        <button id="saveNameBtn">Guardar</button>
       </div>
     </div>
 

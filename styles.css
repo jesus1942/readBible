@@ -269,6 +269,41 @@ button {
   padding: 6px 8px 0;
 }
 
+.name-prompt {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 10, 7, 0.85);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 1100;
+}
+
+.name-prompt[hidden] {
+  display: none !important;
+}
+
+.name-card {
+  background: #fff5e4;
+  border-radius: 18px;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+  max-width: 360px;
+  width: 100%;
+}
+
+.name-title {
+  margin: 8px 0 16px;
+  font-size: 20px;
+  color: #2d2116;
+}
+
+.name-card input {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
 @media (max-width: 640px) {
   h1 {
     font-size: 24px;
