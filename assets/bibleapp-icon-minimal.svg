@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  BIBLEAPP - Icono Minimalista
+  Cruz Latina formada SOLO por puntos (sin líneas)
+  
+  Versículos Vivos, Lectura Plena
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Gradiente del fondo -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3a2a18"/>
+      <stop offset="50%" stop-color="#b27a33"/>
+      <stop offset="100%" stop-color="#f2c060"/>
+    </linearGradient>
+    
+    <!-- Filtro de brillo suave -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Resplandor central sutil -->
+    <radialGradient id="centerGlow" cx="50%" cy="40%" r="40%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  
+  <!-- Fondo -->
+  <rect x="0" y="0" width="512" height="512" rx="90" ry="90" fill="url(#bgGradient)"/>
+  
+  <!-- Resplandor sutil de fondo -->
+  <ellipse cx="256" cy="220" rx="120" ry="160" fill="url(#centerGlow)"/>
+  
+  <!-- CRUZ LATINA - SOLO PUNTOS -->
+  <g transform="translate(256, 240)" filter="url(#glow)">
+    
+    <!-- === LÍNEA VERTICAL === -->
+    
+    <!-- Extremo superior -->
+    <circle cx="0" cy="-160" r="16" fill="#ffffff"/>
+    
+    <!-- Intermedio superior -->
+    <circle cx="0" cy="-110" r="12" fill="#ffffff"/>
+    
+    <!-- CENTRO (intersección) - más grande -->
+    <circle cx="0" cy="-55" r="24" fill="#ffffff"/>
+    
+    <!-- Inferior 1 -->
+    <circle cx="0" cy="5" r="12" fill="#ffffff"/>
+    
+    <!-- Inferior 2 -->
+    <circle cx="0" cy="65" r="12" fill="#ffffff"/>
+    
+    <!-- Inferior 3 -->
+    <circle cx="0" cy="125" r="12" fill="#ffffff"/>
+    
+    <!-- Extremo inferior -->
+    <circle cx="0" cy="185" r="16" fill="#ffffff"/>
+    
+    <!-- === LÍNEA HORIZONTAL === -->
+    
+    <!-- Extremo izquierdo -->
+    <circle cx="-110" cy="-55" r="16" fill="#ffffff"/>
+    
+    <!-- Intermedio izquierdo -->
+    <circle cx="-55" cy="-55" r="12" fill="#ffffff"/>
+    
+    <!-- Intermedio derecho -->
+    <circle cx="55" cy="-55" r="12" fill="#ffffff"/>
+    
+    <!-- Extremo derecho -->
+    <circle cx="110" cy="-55" r="16" fill="#ffffff"/>
+    
+  </g>
+  
+</svg>
