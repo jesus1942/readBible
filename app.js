@@ -45,6 +45,10 @@ const splash = document.getElementById("splash");
 const splashVerse = document.getElementById("splashVerse");
 const splashRef = document.getElementById("splashRef");
 const splashEfemeride = document.getElementById("splashEfemeride");
+const splashGreeting = document.getElementById("splashGreeting");
+const namePrompt = document.getElementById("namePrompt");
+const nameInput = document.getElementById("nameInput");
+const saveNameBtn = document.getElementById("saveNameBtn");
 let touchStartX = 0;
 let touchStartY = 0;
 let isZenOpen = false;
@@ -203,6 +207,7 @@ function showResult(text, reference) {
     zenText.textContent = text;
     zenRef.textContent = `— ${reference}`;
   }
+  persistLastQuery();
 }
 
 function goPrev() {
@@ -221,6 +226,30 @@ function goNext() {
   const book = parsed.book.replace(/^(\d)([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])/, "$1 $2");
   queryInput.value = `${book} ${parsed.chapter}:${next}`;
   fetchVerse();
+}
+
+function persistLastQuery() {
+  const payload = {
+    query: queryInput.value.trim(),
+    version: versionSelect.value
+  };
+  try {
+    localStorage.setItem("lastQuery", JSON.stringify(payload));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function restoreLastQuery() {
+  try {
+    const raw = localStorage.getItem("lastQuery");
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data.query) queryInput.value = data.query;
+    if (data.version) versionSelect.value = data.version;
+  } catch {
+    // ignore storage errors
+  }
 }
 
 function openZen() {
@@ -276,6 +305,8 @@ document.addEventListener("keydown", (event) => {
 });
 
 initVersions();
+restoreLastQuery();
+initNamePrompt();
 initSplash();
 function buildFetchUrls(url) {
   if (location.hostname.endsWith("github.io")) {
@@ -295,6 +326,10 @@ async function initSplash() {
     const dayIndex = dayOfYearIndex();
     const verse = verses[dayIndex % verses.length];
     const efemeride = efemerides[dayIndex % efemerides.length];
+    const name = getUserName();
+    if (name) {
+      splashGreeting.textContent = `Hola ${name}`;
+    }
     splashVerse.textContent = verse.text;
     splashRef.textContent = `— ${verse.reference}`;
     splashEfemeride.textContent = efemeride;
@@ -304,6 +339,31 @@ async function initSplash() {
     splash.addEventListener("touchstart", () => closeSplash(timer), { once: true });
   } catch {
     // ignore splash errors
+  }
+}
+
+function initNamePrompt() {
+  const name = getUserName();
+  if (name) return;
+  namePrompt.hidden = false;
+  saveNameBtn.addEventListener("click", () => {
+    const value = nameInput.value.trim();
+    if (!value) return;
+    setUserName(value);
+    namePrompt.hidden = true;
+    splashGreeting.textContent = `Hola ${value}`;
+  }, { once: true });
+}
+
+function getUserName() {
+  return localStorage.getItem("userName");
+}
+
+function setUserName(name) {
+  try {
+    localStorage.setItem("userName", name);
+  } catch {
+    // ignore
   }
 }
 
