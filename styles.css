@@ -207,6 +207,22 @@ button {
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
   position: relative;
   overflow: hidden;
+  animation: splashIn 0.6s ease-out;
+}
+
+.splash-title {
+  font-size: 28px;
+  letter-spacing: 6px;
+  color: #fff7e6;
+  margin: 0;
+}
+
+.splash-subtitle {
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255, 247, 230, 0.7);
+  margin: 10px 0 14px;
 }
 
 .splash-card::before,
@@ -259,6 +275,26 @@ button {
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.splash-spinner {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 3px solid rgba(242, 192, 96, 0.2);
+  border-top-color: #f2c060;
+  margin: 8px auto 0;
+  animation: spin 1.2s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes splashIn {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 .footer {
