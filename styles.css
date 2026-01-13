@@ -210,6 +210,11 @@ button {
   animation: splashIn 0.6s ease-out;
 }
 
+.splash img,
+.splash-logo {
+  display: none !important;
+}
+
 .splash-title {
   font-size: 28px;
   letter-spacing: 6px;
