@@ -67,6 +67,16 @@
       </div>
     </div>
 
+    <div id="dailyVerse" class="daily" hidden>
+      <div class="daily-card">
+        <p id="dailyGreeting" class="daily-greeting"></p>
+        <p class="daily-title">Versiculo del dia</p>
+        <p id="dailyText" class="daily-text"></p>
+        <p id="dailyRef" class="daily-ref"></p>
+        <button id="dailyClose" class="daily-close" aria-label="Cerrar">✕</button>
+      </div>
+    </div>
+
     <div id="namePrompt" class="name-prompt" hidden>
       <div class="name-card">
         <p class="eyebrow">Bienvenido</p>
@@ -76,7 +86,7 @@
       </div>
     </div>
 
-    <script src="app.js?v=16"></script>
+    <script src="app.js?v=18"></script>
     <script>
       const isGitHubPages = location.hostname.endsWith("github.io");
       if (!isGitHubPages && "serviceWorker" in navigator && location.protocol === "https:") {

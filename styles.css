@@ -302,6 +302,78 @@ button {
   to { transform: translateY(0); opacity: 1; }
 }
 
+.daily {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 12, 8, 0.88);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 1050;
+}
+
+.daily[hidden] {
+  display: none !important;
+}
+
+.daily-card {
+  max-width: 640px;
+  background: #23180f;
+  border: 1px solid #3b2a19;
+  border-radius: 20px;
+  padding: 32px 28px 26px;
+  text-align: center;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.4);
+  position: relative;
+  animation: splashIn 0.6s ease-out;
+}
+
+.daily-greeting {
+  margin: 0 0 10px;
+  color: #f5e7cf;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.daily-title {
+  margin: 0 0 12px;
+  color: #fff7e6;
+  font-size: 20px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.daily-text {
+  font-size: 22px;
+  line-height: 1.6;
+  color: #fff7e6;
+  margin: 8px 0 12px;
+}
+
+.daily-ref {
+  color: var(--accent);
+  font-style: italic;
+  margin-bottom: 16px;
+}
+
+.daily-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: #f2e1c6;
+  color: #2d2116;
+  font-size: 16px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #d9c3a1;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+
 .footer {
   text-align: center;
   color: var(--muted);

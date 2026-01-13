@@ -42,6 +42,11 @@ const zenText = document.getElementById("zenText");
 const zenRef = document.getElementById("zenRef");
 const zenClose = document.getElementById("zenClose");
 const splash = document.getElementById("splash");
+const dailyVerse = document.getElementById("dailyVerse");
+const dailyGreeting = document.getElementById("dailyGreeting");
+const dailyText = document.getElementById("dailyText");
+const dailyRef = document.getElementById("dailyRef");
+const dailyClose = document.getElementById("dailyClose");
 const namePrompt = document.getElementById("namePrompt");
 const nameInput = document.getElementById("nameInput");
 const saveNameBtn = document.getElementById("saveNameBtn");
@@ -352,6 +357,47 @@ function closeSplash(timer) {
   if (timer) clearTimeout(timer);
   splash.hidden = true;
   initNamePrompt();
+  showDailyVerse();
+}
+
+async function showDailyVerse() {
+  try {
+    const verses = await fetchJson("daily_verses.json");
+    const dayIndex = dayOfYearIndex();
+    const verse = verses[dayIndex % verses.length];
+    const name = getUserName();
+    if (name) {
+      dailyGreeting.textContent = `Hola ${name}`;
+      dailyGreeting.hidden = false;
+    } else {
+      dailyGreeting.hidden = true;
+    }
+    dailyText.textContent = verse.text;
+    dailyRef.textContent = `— ${verse.reference}`;
+    dailyVerse.hidden = false;
+    dailyClose.addEventListener("click", closeDailyVerse, { once: true });
+    dailyVerse.addEventListener("click", closeDailyVerse, { once: true });
+    dailyVerse.addEventListener("touchstart", closeDailyVerse, { once: true });
+  } catch {
+    // ignore daily verse errors
+  }
+}
+
+function closeDailyVerse() {
+  dailyVerse.hidden = true;
+}
+
+async function fetchJson(path) {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error("fetch failed");
+  return response.json();
+}
+
+function dayOfYearIndex() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const diff = now - start;
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
 function shareVerseAsPng() {
