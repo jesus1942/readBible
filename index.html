@@ -40,7 +40,10 @@
         <div id="status" class="status">Ingresa una referencia para buscar.</div>
         <div id="result" class="result" hidden>
           <p id="verseText" class="verse"></p>
-          <p id="reference" class="reference"></p>
+          <p class="reference">
+            <span id="reference"></span>
+            <button id="studyDot" class="study-dot" type="button" aria-label="Abrir estudio" hidden></button>
+          </p>
         </div>
       </section>
 
@@ -86,7 +89,34 @@
       </div>
     </div>
 
-    <script src="app.js?v=18"></script>
+    <div id="studyActions" class="sheet-overlay" hidden>
+      <div class="sheet-card">
+        <button id="studyActionNote" class="ghost">Agregar nota</button>
+        <button id="studyActionSermon" class="ghost">Fecha de culto</button>
+        <button id="studyActionDelete" class="ghost">Borrar</button>
+        <button id="studyActionClose" class="ghost">Cerrar</button>
+      </div>
+    </div>
+
+    <div id="studyEditor" class="sheet-overlay" hidden>
+      <div class="sheet-card">
+        <p class="eyebrow">Estudio</p>
+        <div class="field">
+          <label for="studyNote">Nota</label>
+          <textarea id="studyNote" rows="5" placeholder="Escribe una nota..."></textarea>
+        </div>
+        <div class="field">
+          <label for="studySermonDate">Fecha de culto</label>
+          <input id="studySermonDate" type="date" />
+        </div>
+        <div class="actions">
+          <button id="studySave">Guardar</button>
+          <button id="studyCancel" class="ghost">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js?v=19"></script>
     <script>
       const isGitHubPages = location.hostname.endsWith("github.io");
       if (!isGitHubPages && "serviceWorker" in navigator && location.protocol === "https:") {

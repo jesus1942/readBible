@@ -36,6 +36,17 @@ const statusEl = document.getElementById("status");
 const resultEl = document.getElementById("result");
 const verseEl = document.getElementById("verseText");
 const refEl = document.getElementById("reference");
+const studyDot = document.getElementById("studyDot");
+const studyActions = document.getElementById("studyActions");
+const studyActionNote = document.getElementById("studyActionNote");
+const studyActionSermon = document.getElementById("studyActionSermon");
+const studyActionDelete = document.getElementById("studyActionDelete");
+const studyActionClose = document.getElementById("studyActionClose");
+const studyEditor = document.getElementById("studyEditor");
+const studyNote = document.getElementById("studyNote");
+const studySermonDate = document.getElementById("studySermonDate");
+const studySave = document.getElementById("studySave");
+const studyCancel = document.getElementById("studyCancel");
 
 const zenOverlay = document.getElementById("zenOverlay");
 const zenText = document.getElementById("zenText");
@@ -54,6 +65,12 @@ let touchStartX = 0;
 let touchStartY = 0;
 let isZenOpen = false;
 let lastShareAt = 0;
+let currentStudyParsed = null;
+let currentStudyVersion = null;
+let studyPressTimer = null;
+let studyPressStartX = 0;
+let studyPressStartY = 0;
+let studyPressActive = false;
 
 function initVersions() {
   versions.forEach((v) => {
@@ -153,6 +170,8 @@ async function fetchVerse() {
   }
 
   const version = versionSelect.value;
+  currentStudyParsed = parsed;
+  currentStudyVersion = version;
   const search = `${parsed.book} ${parsed.chapter}:${parsed.verseStart}`;
   const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(search)}&version=${version}`;
 
@@ -209,6 +228,7 @@ function showResult(text, reference) {
     zenRef.textContent = `— ${reference}`;
   }
   persistLastQuery();
+  refreshStudyDot();
 }
 
 function goPrev() {
@@ -266,6 +286,172 @@ function closeZen() {
   isZenOpen = false;
 }
 
+function buildStudyKey(parsed, version) {
+  return `study:${buildCacheKey(parsed, version)}`;
+}
+
+function readStudy(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function writeStudy(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ ...data, updatedAt: Date.now() }));
+  } catch {
+    // ignore
+  }
+}
+
+function deleteStudy(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
+function hasStudyData(data) {
+  if (!data) return false;
+  if (data.noteText && data.noteText.trim()) return true;
+  if (data.sermonDate && String(data.sermonDate).trim()) return true;
+  return false;
+}
+
+function currentStudyKey() {
+  if (!currentStudyParsed || !currentStudyVersion) return null;
+  return buildStudyKey(currentStudyParsed, currentStudyVersion);
+}
+
+function refreshStudyDot() {
+  const key = currentStudyKey();
+  if (!key || resultEl.hidden) {
+    studyDot.hidden = true;
+    return;
+  }
+  const data = readStudy(key);
+  studyDot.hidden = !hasStudyData(data);
+}
+
+function openStudyActions() {
+  if (resultEl.hidden) return;
+  if (!studyActions.hidden || !studyEditor.hidden) return;
+  const key = currentStudyKey();
+  if (!key) return;
+  studyActions.hidden = false;
+}
+
+function closeStudyActions() {
+  studyActions.hidden = true;
+}
+
+function openStudyEditorSheet(focus) {
+  const key = currentStudyKey();
+  if (!key) return;
+  const data = readStudy(key) || {};
+  studyNote.value = data.noteText || "";
+  studySermonDate.value = data.sermonDate || "";
+  closeStudyActions();
+  studyEditor.hidden = false;
+  setTimeout(() => {
+    if (focus === "date") {
+      studySermonDate.focus();
+    } else {
+      studyNote.focus();
+    }
+  }, 0);
+}
+
+function closeStudyEditorSheet() {
+  studyEditor.hidden = true;
+}
+
+function saveStudyFromEditor() {
+  const key = currentStudyKey();
+  if (!key) return;
+  const noteText = studyNote.value.trim();
+  const sermonDate = studySermonDate.value ? studySermonDate.value : "";
+  if (!noteText && !sermonDate) {
+    deleteStudy(key);
+    closeStudyEditorSheet();
+    refreshStudyDot();
+    return;
+  }
+  writeStudy(key, { noteText, sermonDate: sermonDate || null });
+  closeStudyEditorSheet();
+  refreshStudyDot();
+}
+
+function deleteStudyForCurrent() {
+  const key = currentStudyKey();
+  if (!key) return;
+  deleteStudy(key);
+  closeStudyActions();
+  closeStudyEditorSheet();
+  refreshStudyDot();
+}
+
+function cancelStudyPress() {
+  if (studyPressTimer) clearTimeout(studyPressTimer);
+  studyPressTimer = null;
+  studyPressActive = false;
+}
+
+function startStudyPress(x, y) {
+  cancelStudyPress();
+  studyPressStartX = x;
+  studyPressStartY = y;
+  studyPressActive = true;
+  studyPressTimer = setTimeout(() => {
+    studyPressTimer = null;
+    if (!studyPressActive) return;
+    openStudyActions();
+  }, 520);
+}
+
+function studyPressMoved(x, y, threshold) {
+  return Math.abs(x - studyPressStartX) > threshold || Math.abs(y - studyPressStartY) > threshold;
+}
+
+function onStudyTouchStart(event) {
+  if (event.touches.length !== 1) return;
+  if (!studyActions.hidden || !studyEditor.hidden) return;
+  const t = event.touches[0];
+  startStudyPress(t.clientX, t.clientY);
+}
+
+function onStudyTouchMove(event) {
+  if (!studyPressActive || event.touches.length !== 1) return;
+  const t = event.touches[0];
+  if (studyPressMoved(t.clientX, t.clientY, 12)) cancelStudyPress();
+}
+
+function onStudyTouchEnd() {
+  cancelStudyPress();
+}
+
+function onStudyMouseDown(event) {
+  if (event.button !== 0) return;
+  if (!studyActions.hidden || !studyEditor.hidden) return;
+  startStudyPress(event.clientX, event.clientY);
+  const onMove = (e) => {
+    if (!studyPressActive) return;
+    if (studyPressMoved(e.clientX, e.clientY, 6)) cancelStudyPress();
+  };
+  const onUp = () => {
+    cancelStudyPress();
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+  };
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+}
+
 
 document.getElementById("searchBtn").addEventListener("click", fetchVerse);
 document.getElementById("prevBtn").addEventListener("click", goPrev);
@@ -304,6 +490,26 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "ArrowUp") goPrev();
   if (event.key === "ArrowDown") goNext();
 });
+
+studyDot.addEventListener("click", () => openStudyEditorSheet("note"));
+studyActions.addEventListener("click", (event) => {
+  if (event.target === studyActions) closeStudyActions();
+});
+studyEditor.addEventListener("click", (event) => {
+  if (event.target === studyEditor) closeStudyEditorSheet();
+});
+studyActionClose.addEventListener("click", closeStudyActions);
+studyActionNote.addEventListener("click", () => openStudyEditorSheet("note"));
+studyActionSermon.addEventListener("click", () => openStudyEditorSheet("date"));
+studyActionDelete.addEventListener("click", deleteStudyForCurrent);
+studySave.addEventListener("click", saveStudyFromEditor);
+studyCancel.addEventListener("click", closeStudyEditorSheet);
+
+resultEl.addEventListener("touchstart", onStudyTouchStart, { passive: true });
+resultEl.addEventListener("touchmove", onStudyTouchMove, { passive: true });
+resultEl.addEventListener("touchend", onStudyTouchEnd, { passive: true });
+resultEl.addEventListener("touchcancel", onStudyTouchEnd, { passive: true });
+resultEl.addEventListener("mousedown", onStudyMouseDown);
 
 initVersions();
 restoreLastQuery();
