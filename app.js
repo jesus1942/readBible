@@ -43,9 +43,12 @@ const studyActionSermon = document.getElementById("studyActionSermon");
 const studyActionDelete = document.getElementById("studyActionDelete");
 const studyActionClose = document.getElementById("studyActionClose");
 const studyEditor = document.getElementById("studyEditor");
+const studyNotesList = document.getElementById("studyNotesList");
 const studyNote = document.getElementById("studyNote");
 const studySermonDate = document.getElementById("studySermonDate");
 const studySave = document.getElementById("studySave");
+const studyNewNote = document.getElementById("studyNewNote");
+const studyDeleteNote = document.getElementById("studyDeleteNote");
 const studyCancel = document.getElementById("studyCancel");
 
 const zenOverlay = document.getElementById("zenOverlay");
@@ -71,6 +74,7 @@ let studyPressTimer = null;
 let studyPressStartX = 0;
 let studyPressStartY = 0;
 let studyPressActive = false;
+let activeStudyNoteId = null;
 
 function initVersions() {
   versions.forEach((v) => {
@@ -294,7 +298,7 @@ function readStudy(key) {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
-    return JSON.parse(raw);
+    return normalizeStudyData(JSON.parse(raw));
   } catch {
     return null;
   }
@@ -302,7 +306,8 @@ function readStudy(key) {
 
 function writeStudy(key, data) {
   try {
-    localStorage.setItem(key, JSON.stringify({ ...data, updatedAt: Date.now() }));
+    const normalized = normalizeStudyData(data);
+    localStorage.setItem(key, JSON.stringify({ ...normalized, updatedAt: Date.now() }));
   } catch {
     // ignore
   }
@@ -318,9 +323,50 @@ function deleteStudy(key) {
 
 function hasStudyData(data) {
   if (!data) return false;
-  if (data.noteText && data.noteText.trim()) return true;
+  if (Array.isArray(data.notes) && data.notes.some((n) => n && n.text && n.text.trim())) return true;
   if (data.sermonDate && String(data.sermonDate).trim()) return true;
   return false;
+}
+
+function normalizeStudyData(data) {
+  if (!data || typeof data !== "object") {
+    return { notes: [], sermonDate: null };
+  }
+  const notes = [];
+  if (Array.isArray(data.notes)) {
+    data.notes.forEach((n) => {
+      if (!n || typeof n !== "object") return;
+      const id = String(n.id || "").trim() || cryptoSafeId();
+      const text = typeof n.text === "string" ? n.text : "";
+      notes.push({
+        id,
+        text,
+        createdAt: typeof n.createdAt === "number" ? n.createdAt : Date.now(),
+        updatedAt: typeof n.updatedAt === "number" ? n.updatedAt : Date.now()
+      });
+    });
+  } else if (typeof data.noteText === "string" && data.noteText.trim()) {
+    notes.push({
+      id: "legacy",
+      text: data.noteText,
+      createdAt: typeof data.createdAt === "number" ? data.createdAt : Date.now(),
+      updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : Date.now()
+    });
+  }
+  return {
+    notes,
+    sermonDate: data.sermonDate || null,
+    updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : Date.now()
+  };
+}
+
+function cryptoSafeId() {
+  try {
+    if (crypto && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  } catch {
+    // ignore
+  }
+  return `n_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
 function currentStudyKey() {
@@ -343,20 +389,30 @@ function openStudyActions() {
   if (!studyActions.hidden || !studyEditor.hidden) return;
   const key = currentStudyKey();
   if (!key) return;
+  clearTextSelection();
   studyActions.hidden = false;
 }
 
 function closeStudyActions() {
   studyActions.hidden = true;
+  clearTextSelection();
 }
 
 function openStudyEditorSheet(focus) {
   const key = currentStudyKey();
   if (!key) return;
-  const data = readStudy(key) || {};
-  studyNote.value = data.noteText || "";
+  const data = readStudy(key) || normalizeStudyData(null);
   studySermonDate.value = data.sermonDate || "";
+  if (data.notes.length) {
+    activeStudyNoteId = data.notes[0].id;
+    studyNote.value = data.notes[0].text || "";
+  } else {
+    activeStudyNoteId = null;
+    studyNote.value = "";
+  }
+  renderNotesList(data);
   closeStudyActions();
+  clearTextSelection();
   studyEditor.hidden = false;
   setTimeout(() => {
     if (focus === "date") {
@@ -369,6 +425,8 @@ function openStudyEditorSheet(focus) {
 
 function closeStudyEditorSheet() {
   studyEditor.hidden = true;
+  activeStudyNoteId = null;
+  clearTextSelection();
 }
 
 function saveStudyFromEditor() {
@@ -376,15 +434,94 @@ function saveStudyFromEditor() {
   if (!key) return;
   const noteText = studyNote.value.trim();
   const sermonDate = studySermonDate.value ? studySermonDate.value : "";
-  if (!noteText && !sermonDate) {
+  const current = readStudy(key) || normalizeStudyData(null);
+  const notes = Array.isArray(current.notes) ? [...current.notes] : [];
+
+  if (activeStudyNoteId) {
+    const idx = notes.findIndex((n) => n.id === activeStudyNoteId);
+    if (idx >= 0) {
+      if (!noteText) {
+        notes.splice(idx, 1);
+      } else {
+        notes[idx] = { ...notes[idx], text: noteText, updatedAt: Date.now() };
+      }
+    } else if (noteText) {
+      notes.unshift({ id: activeStudyNoteId, text: noteText, createdAt: Date.now(), updatedAt: Date.now() });
+    }
+  } else if (noteText) {
+    const id = cryptoSafeId();
+    notes.unshift({ id, text: noteText, createdAt: Date.now(), updatedAt: Date.now() });
+    activeStudyNoteId = id;
+  }
+
+  const next = normalizeStudyData({ notes, sermonDate: sermonDate || null });
+  if (!hasStudyData(next)) {
+    deleteStudy(key);
+  } else {
+    writeStudy(key, next);
+  }
+  closeStudyEditorSheet();
+  refreshStudyDot();
+}
+
+function newStudyNote() {
+  activeStudyNoteId = null;
+  studyNote.value = "";
+  const key = currentStudyKey();
+  if (!key) return;
+  const data = readStudy(key) || normalizeStudyData(null);
+  renderNotesList(data);
+  setTimeout(() => studyNote.focus(), 0);
+}
+
+function deleteActiveStudyNote() {
+  const key = currentStudyKey();
+  if (!key) return;
+  const data = readStudy(key) || normalizeStudyData(null);
+  if (!activeStudyNoteId) return;
+  const notes = data.notes.filter((n) => n.id !== activeStudyNoteId);
+  activeStudyNoteId = notes.length ? notes[0].id : null;
+  const next = normalizeStudyData({ notes, sermonDate: data.sermonDate || null });
+  if (!hasStudyData(next)) {
     deleteStudy(key);
     closeStudyEditorSheet();
     refreshStudyDot();
     return;
   }
-  writeStudy(key, { noteText, sermonDate: sermonDate || null });
-  closeStudyEditorSheet();
+  writeStudy(key, next);
+  if (activeStudyNoteId) {
+    const first = next.notes.find((n) => n.id === activeStudyNoteId);
+    studyNote.value = first ? first.text : "";
+  } else {
+    studyNote.value = "";
+  }
+  renderNotesList(next);
   refreshStudyDot();
+}
+
+function selectStudyNote(noteId) {
+  const key = currentStudyKey();
+  if (!key) return;
+  const data = readStudy(key) || normalizeStudyData(null);
+  const note = data.notes.find((n) => n.id === noteId);
+  activeStudyNoteId = note ? note.id : null;
+  studyNote.value = note ? note.text : "";
+  renderNotesList(data);
+  setTimeout(() => studyNote.focus(), 0);
+}
+
+function renderNotesList(data) {
+  const notes = (data && Array.isArray(data.notes)) ? data.notes : [];
+  studyNotesList.innerHTML = "";
+  if (!notes.length) return;
+  notes.forEach((n, idx) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `note-chip${n.id === activeStudyNoteId ? " active" : ""}`;
+    btn.textContent = String(idx + 1);
+    btn.addEventListener("click", () => selectStudyNote(n.id));
+    studyNotesList.appendChild(btn);
+  });
 }
 
 function deleteStudyForCurrent() {
@@ -396,10 +533,22 @@ function deleteStudyForCurrent() {
   refreshStudyDot();
 }
 
+function clearTextSelection() {
+  try {
+    const active = document.activeElement;
+    if (active && typeof active.blur === "function") active.blur();
+    const sel = window.getSelection ? window.getSelection() : null;
+    if (sel && typeof sel.removeAllRanges === "function") sel.removeAllRanges();
+  } catch {
+    // ignore
+  }
+}
+
 function cancelStudyPress() {
   if (studyPressTimer) clearTimeout(studyPressTimer);
   studyPressTimer = null;
   studyPressActive = false;
+  resultEl.classList.remove("no-select");
 }
 
 function startStudyPress(x, y) {
@@ -407,6 +556,7 @@ function startStudyPress(x, y) {
   studyPressStartX = x;
   studyPressStartY = y;
   studyPressActive = true;
+  resultEl.classList.add("no-select");
   studyPressTimer = setTimeout(() => {
     studyPressTimer = null;
     if (!studyPressActive) return;
@@ -503,6 +653,8 @@ studyActionNote.addEventListener("click", () => openStudyEditorSheet("note"));
 studyActionSermon.addEventListener("click", () => openStudyEditorSheet("date"));
 studyActionDelete.addEventListener("click", deleteStudyForCurrent);
 studySave.addEventListener("click", saveStudyFromEditor);
+studyNewNote.addEventListener("click", newStudyNote);
+studyDeleteNote.addEventListener("click", deleteActiveStudyNote);
 studyCancel.addEventListener("click", closeStudyEditorSheet);
 
 resultEl.addEventListener("touchstart", onStudyTouchStart, { passive: true });

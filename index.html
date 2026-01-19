@@ -98,9 +98,13 @@
       </div>
     </div>
 
-    <div id="studyEditor" class="sheet-overlay" hidden>
+    <div id="studyEditor" class="sheet-overlay center" hidden>
       <div class="sheet-card">
         <p class="eyebrow">Estudio</p>
+        <div class="field">
+          <label>Notas</label>
+          <div id="studyNotesList" class="notes-list"></div>
+        </div>
         <div class="field">
           <label for="studyNote">Nota</label>
           <textarea id="studyNote" rows="5" placeholder="Escribe una nota..."></textarea>
@@ -111,12 +115,14 @@
         </div>
         <div class="actions">
           <button id="studySave">Guardar</button>
+          <button id="studyNewNote" class="ghost">Nueva nota</button>
+          <button id="studyDeleteNote" class="ghost">Borrar nota</button>
           <button id="studyCancel" class="ghost">Cancelar</button>
         </div>
       </div>
     </div>
 
-    <script src="app.js?v=19"></script>
+    <script src="app.js?v=21"></script>
     <script>
       const isGitHubPages = location.hostname.endsWith("github.io");
       if (!isGitHubPages && "serviceWorker" in navigator && location.protocol === "https:") {

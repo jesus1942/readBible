@@ -130,6 +130,12 @@ button {
   text-align: center;
 }
 
+.no-select,
+.no-select * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .reference {
   text-align: center;
   color: var(--accent);
@@ -162,6 +168,10 @@ button {
   z-index: 1200;
 }
 
+.sheet-overlay.center {
+  align-items: center;
+}
+
 .sheet-overlay[hidden] {
   display: none !important;
 }
@@ -183,6 +193,29 @@ button {
 
 .sheet-card .actions button {
   flex: 1;
+}
+
+.notes-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.note-chip {
+  background: #fff3df;
+  color: #3b2c19;
+  border: 1px solid #e2caa0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.note-chip.active {
+  background: var(--accent);
+  border-color: rgba(243, 156, 18, 0.6);
+  color: #1b1100;
 }
 
 .status {
