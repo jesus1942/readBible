@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-python3 /home/jesusolguin/Escritorio/pimba/pwa/proxy_server.py
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+python3 "${BASE_DIR}/proxy_server.py"
