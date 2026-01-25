@@ -60,6 +60,7 @@ const menuClose = document.getElementById("menuClose");
 const helpOpen = document.getElementById("helpOpen");
 const helpOverlay = document.getElementById("helpOverlay");
 const helpClose = document.getElementById("helpClose");
+const analytics = typeof window !== "undefined" ? window.umami : null;
 
 const zenOverlay = document.getElementById("zenOverlay");
 const zenText = document.getElementById("zenText");
@@ -210,6 +211,8 @@ async function fetchVerse() {
   const version = versionSelect.value;
   currentStudyParsed = parsed;
   currentStudyVersion = version;
+  trackEvent("search_chapter", { version, query: queryInput.value.trim() });
+  trackEvent("search_verse", { version, query: queryInput.value.trim() });
   const verseQuery = parsed.verseEnd > parsed.verseStart
     ? `${parsed.verseStart}-${parsed.verseEnd}`
     : `${parsed.verseStart}`;
@@ -384,6 +387,7 @@ function openZen() {
   zenRef.textContent = refEl.textContent;
   zenOverlay.hidden = false;
   isZenOpen = true;
+  trackEvent("open_zen");
 }
 
 function closeZen() {
@@ -752,6 +756,15 @@ function addListener(el, event, handler, options) {
   el.addEventListener(event, handler, options);
 }
 
+function trackEvent(name, data) {
+  if (!analytics) return;
+  try {
+    analytics.track(name, data);
+  } catch {
+    // ignore tracking errors
+  }
+}
+
 addListener(studyDot, "click", () => openStudyEditorSheet("note"));
 addListener(studyActions, "click", (event) => {
   if (event.target === studyActions) closeStudyActions();
@@ -786,6 +799,9 @@ addListener(helpOpen, "click", () => {
 addListener(helpClose, "click", closeHelp);
 addListener(helpOverlay, "click", (event) => {
   if (event.target === helpOverlay) closeHelp();
+});
+window.addEventListener("appinstalled", () => {
+  trackEvent("app_installed");
 });
 
 initVersions();
@@ -936,6 +952,7 @@ function closeMenu() {
 function openHelp() {
   if (!helpOverlay) return;
   helpOverlay.hidden = false;
+  trackEvent("open_help");
 }
 
 function closeHelp() {
@@ -984,6 +1001,7 @@ function shareVerseAsPng() {
   const now = Date.now();
   if (now - lastShareAt < 2000) return;
   lastShareAt = now;
+  trackEvent("share_png");
 
   const text = verseEl.textContent.trim();
   const reference = refEl.textContent.trim();
