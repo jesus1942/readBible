@@ -5,6 +5,7 @@ const versions = [
 ];
 
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24;
+const DAILY_VERSION = "RVR1960";
 
 const unwantedTexts = [
   "Read the Bible", "Leer la Biblia",
@@ -857,6 +858,11 @@ async function showDailyVerse() {
     const verses = await fetchJson("daily_verses.json");
     const dayIndex = dayOfYearIndex();
     const verse = verses[dayIndex % verses.length];
+    const reference = verse.reference || "";
+    let verseText = verse.text || "";
+    if (!verseText && reference) {
+      verseText = await fetchVerseByReference(reference, DAILY_VERSION);
+    }
     const name = getUserName();
     if (name) {
       dailyGreeting.textContent = `Hola ${name}`;
@@ -864,8 +870,12 @@ async function showDailyVerse() {
     } else {
       dailyGreeting.hidden = true;
     }
-    dailyText.textContent = verse.text;
-    dailyRef.textContent = `— ${verse.reference}`;
+    dailyText.textContent = verseText || "No se pudo cargar el versiculo.";
+    if (reference) {
+      dailyRef.textContent = `— ${reference} (${DAILY_VERSION})`;
+    } else {
+      dailyRef.textContent = "";
+    }
     dailyVerse.hidden = false;
     dailyClose.addEventListener("click", closeDailyVerse, { once: true });
     dailyVerse.addEventListener("click", closeDailyVerse, { once: true });
@@ -883,6 +893,17 @@ async function fetchJson(path) {
   const response = await fetch(path);
   if (!response.ok) throw new Error("fetch failed");
   return response.json();
+}
+
+async function fetchVerseByReference(reference, version) {
+  const parsed = parseReference(reference);
+  if (!parsed) return "";
+  const search = `${parsed.book} ${parsed.chapter}:${parsed.verseStart}`;
+  const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(search)}&version=${version}`;
+  const fetchUrls = buildFetchUrls(url);
+  const html = await fetchFirstHtml(fetchUrls, 7000);
+  if (!html) return "";
+  return parseHTML(html, parsed) || "";
 }
 
 function dayOfYearIndex() {
