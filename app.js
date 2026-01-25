@@ -50,6 +50,7 @@ const studySave = document.getElementById("studySave");
 const studyNewNote = document.getElementById("studyNewNote");
 const studyDeleteNote = document.getElementById("studyDeleteNote");
 const studyCancel = document.getElementById("studyCancel");
+const chapterBtn = document.getElementById("chapterBtn");
 
 const zenOverlay = document.getElementById("zenOverlay");
 const zenText = document.getElementById("zenText");
@@ -166,6 +167,19 @@ function parseHTML(html, query) {
   return verseText || null;
 }
 
+function parseChapterHTML(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const passage = doc.querySelector("div.passage-text");
+  if (!passage) return null;
+
+  passage.querySelectorAll("sup, footnote, crossreference, audio").forEach((el) => el.remove());
+  passage.querySelectorAll("h1, h2, h3, h4, h5").forEach((el) => el.remove());
+  passage.querySelectorAll(".footnotes, .crossrefs, .passage-other-trans, .full-chap-link").forEach((el) => el.remove());
+
+  const text = cleanText(passage.textContent || "");
+  return text || null;
+}
+
 async function fetchVerse() {
   const parsed = parseReference(queryInput.value);
   if (!parsed) {
@@ -203,6 +217,48 @@ async function fetchVerse() {
     writeCache(cacheKey, { text: verseText, reference });
     showResult(verseText, reference);
   } catch (err) {
+    showStatus("Error de red al conectar con el servidor local.", true);
+  }
+}
+
+async function fetchChapter() {
+  const parsed = parseReference(queryInput.value);
+  if (!parsed) {
+    showStatus("Formato invalido. Usa Libro Capitulo:Verso", true);
+    return;
+  }
+
+  const version = versionSelect.value;
+  currentStudyParsed = parsed;
+  currentStudyVersion = version;
+  const search = `${parsed.book} ${parsed.chapter}`;
+  const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(search)}&version=${version}`;
+
+  const cacheKey = buildChapterCacheKey(parsed, version);
+  const cached = readCache(cacheKey);
+  if (cached) {
+    showResult(cached.text, cached.reference);
+    return;
+  }
+  const fetchUrls = buildFetchUrls(url);
+
+  showStatus("Buscando...", false);
+  try {
+    const html = await fetchFirstHtml(fetchUrls, 7000);
+    if (!html) {
+      showStatus("No se pudo obtener contenido del servidor.", true);
+      return;
+    }
+    const chapterText = parseChapterHTML(html);
+    if (!chapterText) {
+      showStatus("No se pudo extraer el capitulo.", true);
+      return;
+    }
+    const bookDisplay = parsed.book.replace(/^(\d)([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])/, "$1 $2");
+    const reference = `${bookDisplay} ${parsed.chapter} (${version})`;
+    writeCache(cacheKey, { text: chapterText, reference });
+    showResult(chapterText, reference);
+  } catch {
     showStatus("Error de red al conectar con el servidor local.", true);
   }
 }
@@ -594,11 +650,12 @@ function onStudyMouseDown(event) {
 }
 
 
-document.getElementById("searchBtn").addEventListener("click", fetchVerse);
-document.getElementById("prevBtn").addEventListener("click", goPrev);
-document.getElementById("nextBtn").addEventListener("click", goNext);
-document.getElementById("zenBtn").addEventListener("click", openZen);
-zenClose.addEventListener("click", closeZen);
+addListener(document.getElementById("searchBtn"), "click", fetchVerse);
+addListener(document.getElementById("prevBtn"), "click", goPrev);
+addListener(document.getElementById("nextBtn"), "click", goNext);
+addListener(document.getElementById("zenBtn"), "click", openZen);
+addListener(chapterBtn, "click", fetchChapter);
+addListener(zenClose, "click", closeZen);
 // tap-to-close removed to avoid swallowing swipe events
 
 zenOverlay.hidden = true;
@@ -895,6 +952,10 @@ function drawCenteredText(ctx, text, totalWidth, y) {
 
 function buildCacheKey(parsed, version) {
   return `verse:${parsed.book}:${parsed.chapter}:${parsed.verseStart}-${parsed.verseEnd}:${version}`;
+}
+
+function buildChapterCacheKey(parsed, version) {
+  return `chapter:${parsed.book}:${parsed.chapter}:${version}`;
 }
 
 function readCache(key) {
