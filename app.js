@@ -1,6 +1,7 @@
 const versions = [
   "RVR1960", "NVI", "LBLA", "NRSV", "DHH", "TLA",
-  "NBD", "BLPH", "JBS", "PDT", "NTV", "RVR2000", "NBLA"
+  "NBD", "BLPH", "JBS", "PDT", "NTV", "RVR2000", "NBLA",
+  "ARA", "ARC", "NVI-PT", "NTLH", "NVT", "TB"
 ];
 
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24;
