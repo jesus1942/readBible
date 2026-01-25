@@ -117,6 +117,13 @@ function formatBookDisplay(book) {
   return book.replace(/^(\d)([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])/, "$1 $2");
 }
 
+function sanitizeReferenceString(reference) {
+  if (!reference) return "";
+  let cleaned = reference.split(";")[0].trim();
+  cleaned = cleaned.replace(/\s+/g, " ");
+  return cleaned;
+}
+
 function cleanText(text) {
   let cleaned = text;
   unwantedTexts.forEach((u) => {
@@ -864,7 +871,7 @@ async function showDailyVerse() {
     const verses = await fetchJson("daily_verses.json");
     const dayIndex = dayOfYearIndex();
     const verse = verses[dayIndex % verses.length];
-    const reference = verse.reference || "";
+    const reference = sanitizeReferenceString(verse.reference || "");
     let verseText = verse.text || "";
     if (!verseText && reference) {
       verseText = await fetchVerseByReference(reference, DAILY_VERSION);
