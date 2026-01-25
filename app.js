@@ -189,16 +189,7 @@ async function fetchVerse() {
 
   showStatus("Buscando...", false);
   try {
-    let html = "";
-    for (const fetchUrl of fetchUrls) {
-      const response = await fetch(fetchUrl);
-      if (!response.ok) continue;
-      const text = await response.text();
-      if (text && text.length > 500) {
-        html = text;
-        break;
-      }
-    }
+    const html = await fetchFirstHtml(fetchUrls, 7000);
     if (!html) {
       showStatus("No se pudo obtener contenido del servidor.", true);
       return;
@@ -678,6 +669,50 @@ function buildFetchUrls(url) {
     return urls.slice(1);
   }
   return urls;
+}
+
+function anyResolve(promises) {
+  return new Promise((resolve, reject) => {
+    let pending = promises.length;
+    if (!pending) {
+      reject(new Error("No promises"));
+      return;
+    }
+    promises.forEach((p) => {
+      Promise.resolve(p).then(resolve, (err) => {
+        pending -= 1;
+        if (pending === 0) reject(err);
+      });
+    });
+  });
+}
+
+async function fetchWithTimeout(url, timeoutMs, controller) {
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error("bad response");
+    const text = await response.text();
+    if (!text || text.length <= 500) throw new Error("short response");
+    return text;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchFirstHtml(urls, timeoutMs) {
+  const controllers = urls.map(() => new AbortController());
+  try {
+    const attempts = urls.map((url, index) =>
+      fetchWithTimeout(url, timeoutMs, controllers[index])
+    );
+    const html = await anyResolve(attempts);
+    controllers.forEach((ctrl) => ctrl.abort());
+    return html;
+  } catch {
+    controllers.forEach((ctrl) => ctrl.abort());
+    return "";
+  }
 }
 
 function initSplash() {
