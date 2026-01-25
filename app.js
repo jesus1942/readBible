@@ -113,6 +113,10 @@ function buildReference(book, chapter, verseStart, verseEnd, version) {
   return `${bookDisplay} ${chapter}:${verseStart}-${verseEnd} (${version})`;
 }
 
+function formatBookDisplay(book) {
+  return book.replace(/^(\d)([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])/, "$1 $2");
+}
+
 function cleanText(text) {
   let cleaned = text;
   unwantedTexts.forEach((u) => {
@@ -196,7 +200,8 @@ async function fetchVerse() {
   const verseQuery = parsed.verseEnd > parsed.verseStart
     ? `${parsed.verseStart}-${parsed.verseEnd}`
     : `${parsed.verseStart}`;
-  const search = `${parsed.book} ${parsed.chapter}:${verseQuery}`;
+  const bookQuery = formatBookDisplay(parsed.book);
+  const search = `${bookQuery} ${parsed.chapter}:${verseQuery}`;
   const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(search)}&version=${version}`;
 
   const cacheKey = buildCacheKey(parsed, version);
@@ -237,7 +242,8 @@ async function fetchChapter() {
   const version = versionSelect.value;
   currentStudyParsed = parsed;
   currentStudyVersion = version;
-  const search = `${parsed.book} ${parsed.chapter}`;
+  const bookQuery = formatBookDisplay(parsed.book);
+  const search = `${bookQuery} ${parsed.chapter}`;
   const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(search)}&version=${version}`;
 
   const cacheKey = buildChapterCacheKey(parsed, version);
@@ -898,7 +904,8 @@ async function fetchJson(path) {
 async function fetchVerseByReference(reference, version) {
   const parsed = parseReference(reference);
   if (!parsed) return "";
-  const search = `${parsed.book} ${parsed.chapter}:${parsed.verseStart}`;
+  const bookQuery = formatBookDisplay(parsed.book);
+  const search = `${bookQuery} ${parsed.chapter}:${parsed.verseStart}`;
   const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(search)}&version=${version}`;
   const fetchUrls = buildFetchUrls(url);
   const html = await fetchFirstHtml(fetchUrls, 7000);
