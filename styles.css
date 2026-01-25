@@ -469,6 +469,42 @@ button {
   font-size: 13px;
   line-height: 1.4;
   padding: 6px 8px 0;
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+}
+
+.footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.footer-actions a {
+  text-decoration: none;
+}
+
+.whatsapp-button {
+  background: #1faa59;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  box-shadow: 0 6px 12px rgba(31, 170, 89, 0.3);
+}
+
+.mp-button {
+  background: #009ee3;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  box-shadow: 0 6px 12px rgba(0, 158, 227, 0.3);
 }
 
 .name-prompt {
