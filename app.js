@@ -54,6 +54,12 @@ const studyDeleteNote = document.getElementById("studyDeleteNote");
 const studyCancel = document.getElementById("studyCancel");
 const chapterBtn = document.getElementById("chapterBtn");
 const mpButton = document.querySelector(".mp-button");
+const menuBtn = document.getElementById("menuBtn");
+const sideMenu = document.getElementById("sideMenu");
+const menuClose = document.getElementById("menuClose");
+const helpOpen = document.getElementById("helpOpen");
+const helpOverlay = document.getElementById("helpOverlay");
+const helpClose = document.getElementById("helpClose");
 
 const zenOverlay = document.getElementById("zenOverlay");
 const zenText = document.getElementById("zenText");
@@ -768,6 +774,20 @@ addListener(resultEl, "touchend", onStudyTouchEnd, { passive: true });
 addListener(resultEl, "touchcancel", onStudyTouchEnd, { passive: true });
 addListener(resultEl, "mousedown", onStudyMouseDown);
 
+addListener(menuBtn, "click", openMenu);
+addListener(menuClose, "click", closeMenu);
+addListener(sideMenu, "click", (event) => {
+  if (event.target === sideMenu) closeMenu();
+});
+addListener(helpOpen, "click", () => {
+  closeMenu();
+  openHelp();
+});
+addListener(helpClose, "click", closeHelp);
+addListener(helpOverlay, "click", (event) => {
+  if (event.target === helpOverlay) closeHelp();
+});
+
 initVersions();
 restoreLastQuery();
 initSplash();
@@ -864,6 +884,7 @@ function closeSplash(timer) {
   splash.hidden = true;
   initNamePrompt();
   showDailyVerse();
+  showHelpIfFirstTime();
 }
 
 async function showDailyVerse() {
@@ -900,6 +921,37 @@ async function showDailyVerse() {
 
 function closeDailyVerse() {
   dailyVerse.hidden = true;
+}
+
+function openMenu() {
+  if (!sideMenu) return;
+  sideMenu.hidden = false;
+}
+
+function closeMenu() {
+  if (!sideMenu) return;
+  sideMenu.hidden = true;
+}
+
+function openHelp() {
+  if (!helpOverlay) return;
+  helpOverlay.hidden = false;
+}
+
+function closeHelp() {
+  if (!helpOverlay) return;
+  helpOverlay.hidden = true;
+}
+
+function showHelpIfFirstTime() {
+  try {
+    const seen = localStorage.getItem("helpSeen");
+    if (seen) return;
+    localStorage.setItem("helpSeen", "1");
+    openHelp();
+  } catch {
+    openHelp();
+  }
 }
 
 async function fetchJson(path) {

@@ -18,6 +18,7 @@
           <h1>Versiculos vivos, lectura plena.</h1>
           <p class="subtitle">Busqueda rapida, lectura plena y referencias destacadas.</p>
         </div>
+        <button id="menuBtn" class="menu-btn" aria-label="Abrir menu">☰</button>
       </header>
 
       <section class="card search">
@@ -128,7 +129,39 @@
       </div>
     </div>
 
-    <script src="app.js?v=29"></script>
+    <div id="sideMenu" class="side-menu" hidden>
+      <div class="side-menu-panel" role="dialog" aria-label="Menu">
+        <div class="side-menu-header">
+          <p class="eyebrow">Menu</p>
+          <button id="menuClose" class="menu-close" aria-label="Cerrar menu">✕</button>
+        </div>
+        <button id="helpOpen" class="ghost">Ayuda guiada</button>
+        <div class="side-menu-about">
+          <p class="eyebrow">Acerca de</p>
+          <p class="about-text">BibleApp, lectura biblica sin distracciones.</p>
+          <p class="about-version">Version v1.0.0</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="helpOverlay" class="help-overlay" hidden>
+      <div class="help-card">
+        <p class="eyebrow">Como funciona</p>
+        <ol class="help-steps">
+          <li>Escribe una referencia: <strong>Juan 3:16</strong>.</li>
+          <li>Usa rangos: <strong>3:8-12</strong> para varios versiculos.</li>
+          <li>Lee el capitulo con <strong>Capitulo completo</strong>.</li>
+          <li>Navega con <strong>Anterior/Siguiente</strong> o desliza en lectura plena.</li>
+          <li>Activa <strong>Lectura plena</strong> para concentrarte.</li>
+          <li>El versiculo del dia aparece al abrir la app.</li>
+          <li>En lectura plena, desliza hacia arriba para compartir.</li>
+          <li>Manten presionado el resultado para notas de estudio.</li>
+        </ol>
+        <button id="helpClose">Entendido</button>
+      </div>
+    </div>
+
+    <script src="app.js?v=30"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;
