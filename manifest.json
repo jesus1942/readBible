@@ -1,7 +1,7 @@
 {
   "name": "BibleApp PWA",
   "short_name": "BibleApp",
-  "start_url": "./index.html",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#0f1412",
   "theme_color": "#0f1412",

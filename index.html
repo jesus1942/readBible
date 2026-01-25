@@ -124,8 +124,9 @@
 
     <script src="app.js?v=21"></script>
     <script>
-      const isGitHubPages = location.hostname.endsWith("github.io");
-      if (!isGitHubPages && "serviceWorker" in navigator && location.protocol === "https:") {
+      const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+      const canRegister = location.protocol === "https:" || isLocalhost;
+      if ("serviceWorker" in navigator && canRegister) {
         navigator.serviceWorker.register("service-worker.js");
       }
     </script>
