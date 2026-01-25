@@ -724,8 +724,7 @@ function buildFetchUrls(url) {
   const urls = [
     `${location.origin}/proxy?url=${encoded}`,
     `https://api.allorigins.win/raw?url=${encoded}`,
-    `https://corsproxy.io/?${encoded}`,
-    `https://thingproxy.freeboard.io/fetch/${url}`
+    `https://corsproxy.io/?${encoded}`
   ];
   if (location.hostname.endsWith("github.io")) {
     return urls.slice(1);
