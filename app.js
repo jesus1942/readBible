@@ -52,6 +52,7 @@ const studyNewNote = document.getElementById("studyNewNote");
 const studyDeleteNote = document.getElementById("studyDeleteNote");
 const studyCancel = document.getElementById("studyCancel");
 const chapterBtn = document.getElementById("chapterBtn");
+const mpButton = document.querySelector(".mp-button");
 
 const zenOverlay = document.getElementById("zenOverlay");
 const zenText = document.getElementById("zenText");
@@ -265,6 +266,35 @@ async function fetchChapter() {
   } catch {
     showStatus("Error de red al conectar con el servidor local.", true);
   }
+}
+
+function openMercadoPagoTransfer() {
+  const alias = "denovaje";
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const isAndroid = /Android/.test(navigator.userAgent);
+  const deepLink = `mercadopago://transfer?alias=${encodeURIComponent(alias)}`;
+  const storeLink = isIOS
+    ? "https://apps.apple.com/app/mercado-pago/id925436649"
+    : "https://play.google.com/store/apps/details?id=com.mercadopago.wallet";
+  const webLink = "https://link.mercadopago.com.ar/denovaje";
+
+  if (!isIOS && !isAndroid) {
+    window.open(webLink, "_blank", "noopener");
+    return;
+  }
+
+  const fallbackTimer = setTimeout(() => {
+    if (document.visibilityState === "visible") {
+      window.location.href = storeLink;
+    }
+  }, 1500);
+
+  const cancelFallback = () => clearTimeout(fallbackTimer);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) cancelFallback();
+  }, { once: true });
+
+  window.location.href = deepLink;
 }
 
 function showStatus(text, isError) {
@@ -660,6 +690,10 @@ addListener(document.getElementById("nextBtn"), "click", goNext);
 addListener(document.getElementById("zenBtn"), "click", openZen);
 addListener(chapterBtn, "click", fetchChapter);
 addListener(zenClose, "click", closeZen);
+addListener(mpButton, "click", (event) => {
+  event.preventDefault();
+  openMercadoPagoTransfer();
+});
 // tap-to-close removed to avoid swallowing swipe events
 
 zenOverlay.hidden = true;
