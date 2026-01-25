@@ -632,27 +632,32 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "ArrowDown") goNext();
 });
 
-studyDot.addEventListener("click", () => openStudyEditorSheet("note"));
-studyActions.addEventListener("click", (event) => {
+function addListener(el, event, handler, options) {
+  if (!el) return;
+  el.addEventListener(event, handler, options);
+}
+
+addListener(studyDot, "click", () => openStudyEditorSheet("note"));
+addListener(studyActions, "click", (event) => {
   if (event.target === studyActions) closeStudyActions();
 });
-studyEditor.addEventListener("click", (event) => {
+addListener(studyEditor, "click", (event) => {
   if (event.target === studyEditor) closeStudyEditorSheet();
 });
-studyActionClose.addEventListener("click", closeStudyActions);
-studyActionNote.addEventListener("click", () => openStudyEditorSheet("note"));
-studyActionSermon.addEventListener("click", () => openStudyEditorSheet("date"));
-studyActionDelete.addEventListener("click", deleteStudyForCurrent);
-studySave.addEventListener("click", saveStudyFromEditor);
-studyNewNote.addEventListener("click", newStudyNote);
-studyDeleteNote.addEventListener("click", deleteActiveStudyNote);
-studyCancel.addEventListener("click", closeStudyEditorSheet);
+addListener(studyActionClose, "click", closeStudyActions);
+addListener(studyActionNote, "click", () => openStudyEditorSheet("note"));
+addListener(studyActionSermon, "click", () => openStudyEditorSheet("date"));
+addListener(studyActionDelete, "click", deleteStudyForCurrent);
+addListener(studySave, "click", saveStudyFromEditor);
+addListener(studyNewNote, "click", newStudyNote);
+addListener(studyDeleteNote, "click", deleteActiveStudyNote);
+addListener(studyCancel, "click", closeStudyEditorSheet);
 
-resultEl.addEventListener("touchstart", onStudyTouchStart, { passive: true });
-resultEl.addEventListener("touchmove", onStudyTouchMove, { passive: true });
-resultEl.addEventListener("touchend", onStudyTouchEnd, { passive: true });
-resultEl.addEventListener("touchcancel", onStudyTouchEnd, { passive: true });
-resultEl.addEventListener("mousedown", onStudyMouseDown);
+addListener(resultEl, "touchstart", onStudyTouchStart, { passive: true });
+addListener(resultEl, "touchmove", onStudyTouchMove, { passive: true });
+addListener(resultEl, "touchend", onStudyTouchEnd, { passive: true });
+addListener(resultEl, "touchcancel", onStudyTouchEnd, { passive: true });
+addListener(resultEl, "mousedown", onStudyMouseDown);
 
 initVersions();
 restoreLastQuery();
