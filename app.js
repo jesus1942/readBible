@@ -190,7 +190,10 @@ async function fetchVerse() {
   const version = versionSelect.value;
   currentStudyParsed = parsed;
   currentStudyVersion = version;
-  const search = `${parsed.book} ${parsed.chapter}:${parsed.verseStart}`;
+  const verseQuery = parsed.verseEnd > parsed.verseStart
+    ? `${parsed.verseStart}-${parsed.verseEnd}`
+    : `${parsed.verseStart}`;
+  const search = `${parsed.book} ${parsed.chapter}:${verseQuery}`;
   const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(search)}&version=${version}`;
 
   const cacheKey = buildCacheKey(parsed, version);
