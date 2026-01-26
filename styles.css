@@ -245,10 +245,20 @@ button {
   place-items: center;
   padding: 24px;
   z-index: 999;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 240ms ease;
 }
 
 .zen[hidden] {
-  display: none !important;
+  display: grid !important;
+}
+
+.zen:not([hidden]) {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
 }
 
 .zen-content {
@@ -294,10 +304,20 @@ button {
   place-items: center;
   padding: 24px;
   z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 240ms ease;
 }
 
 .splash[hidden] {
-  display: none !important;
+  display: grid !important;
+}
+
+.splash:not([hidden]) {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
 }
 
 .splash-card {
@@ -413,10 +433,20 @@ button {
   place-items: center;
   padding: 24px;
   z-index: 1050;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 240ms ease;
 }
 
 .daily[hidden] {
-  display: none !important;
+  display: grid !important;
+}
+
+.daily:not([hidden]) {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
 }
 
 .daily-card {
@@ -495,10 +525,20 @@ button {
   display: grid;
   justify-items: end;
   z-index: 1300;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 240ms ease;
 }
 
 .side-menu[hidden] {
-  display: none !important;
+  display: grid !important;
+}
+
+.side-menu:not([hidden]) {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
 }
 
 .side-menu-panel {
@@ -510,6 +550,12 @@ button {
   display: grid;
   gap: 16px;
   align-content: start;
+  transform: translateX(12px);
+  transition: transform 240ms ease;
+}
+
+.side-menu:not([hidden]) .side-menu-panel {
+  transform: translateX(0);
 }
 
 .side-menu-header {
@@ -558,10 +604,20 @@ button {
   place-items: center;
   padding: 18px;
   z-index: 1400;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 240ms ease;
 }
 
 .help-overlay[hidden] {
-  display: none !important;
+  display: grid !important;
+}
+
+.help-overlay:not([hidden]) {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
 }
 
 .help-card {
@@ -573,6 +629,12 @@ button {
   border: 1px solid #ede1cd;
   display: grid;
   gap: 12px;
+  transform: translateY(12px);
+  transition: transform 240ms ease;
+}
+
+.help-overlay:not([hidden]) .help-card {
+  transform: translateY(0);
 }
 
 .highlight {
