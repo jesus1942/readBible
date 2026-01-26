@@ -91,6 +91,8 @@ let currentResultKey = null;
 let currentResultText = "";
 let activeHighlightRange = null;
 let activeHighlightContainer = null;
+let lastTapAt = 0;
+let lastTapContainer = null;
 
 function initVersions() {
   versions.forEach((v) => {
@@ -932,6 +934,16 @@ function removeHighlightFromClick(event) {
   updateHighlightedViews();
 }
 
+function handleDoubleTap(container) {
+  const now = Date.now();
+  const isDoubleTap = lastTapContainer === container && now - lastTapAt < 320;
+  lastTapAt = now;
+  lastTapContainer = container;
+  if (!isDoubleTap) return;
+  maybeShowHighlightButton(container);
+  applyHighlight();
+}
+
 addListener(studyDot, "click", () => openStudyEditorSheet("note"));
 addListener(studyActions, "click", (event) => {
   if (event.target === studyActions) closeStudyActions();
@@ -954,10 +966,16 @@ addListener(resultEl, "touchend", onStudyTouchEnd, { passive: true });
 addListener(resultEl, "touchcancel", onStudyTouchEnd, { passive: true });
 addListener(resultEl, "mousedown", onStudyMouseDown);
 addListener(verseEl, "mouseup", () => maybeShowHighlightButton(verseEl));
-addListener(verseEl, "touchend", () => maybeShowHighlightButton(verseEl));
+addListener(verseEl, "touchend", () => {
+  maybeShowHighlightButton(verseEl);
+  handleDoubleTap(verseEl);
+});
 addListener(verseEl, "click", removeHighlightFromClick);
 addListener(zenText, "mouseup", () => maybeShowHighlightButton(zenText));
-addListener(zenText, "touchend", () => maybeShowHighlightButton(zenText));
+addListener(zenText, "touchend", () => {
+  maybeShowHighlightButton(zenText);
+  handleDoubleTap(zenText);
+});
 addListener(zenText, "click", removeHighlightFromClick);
 addListener(document, "selectionchange", () => {
   const selection = window.getSelection();
