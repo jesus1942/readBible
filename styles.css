@@ -575,6 +575,30 @@ button {
   gap: 12px;
 }
 
+.highlight {
+  background: linear-gradient(
+    transparent 35%,
+    rgba(255, 214, 74, 0.6) 35%,
+    rgba(255, 214, 74, 0.6) 85%,
+    transparent 85%
+  );
+  border-radius: 4px;
+}
+
+.highlight-btn {
+  position: fixed;
+  z-index: 1500;
+  background: #1c1a16;
+  color: #fff1cf;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25);
+}
+
 .help-steps {
   margin: 0;
   padding-left: 20px;

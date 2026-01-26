@@ -61,6 +61,7 @@ const helpOpen = document.getElementById("helpOpen");
 const helpOverlay = document.getElementById("helpOverlay");
 const helpClose = document.getElementById("helpClose");
 const analytics = typeof window !== "undefined" ? window.umami : null;
+const highlightBtn = document.getElementById("highlightBtn");
 
 const zenOverlay = document.getElementById("zenOverlay");
 const zenText = document.getElementById("zenText");
@@ -86,6 +87,10 @@ let studyPressStartX = 0;
 let studyPressStartY = 0;
 let studyPressActive = false;
 let activeStudyNoteId = null;
+let currentResultKey = null;
+let currentResultText = "";
+let activeHighlightRange = null;
+let activeHighlightContainer = null;
 
 function initVersions() {
   versions.forEach((v) => {
@@ -129,6 +134,94 @@ function sanitizeReferenceString(reference) {
   let cleaned = reference.split(";")[0].trim();
   cleaned = cleaned.replace(/\s+/g, " ");
   return cleaned;
+}
+
+function highlightStorageKey() {
+  if (!currentResultKey) return null;
+  return `highlight:${currentResultKey}`;
+}
+
+function readHighlights(key) {
+  if (!key) return [];
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeHighlights(key, highlights) {
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(highlights));
+  } catch {
+    // ignore
+  }
+}
+
+function normalizeHighlights(highlights, maxLen) {
+  const cleaned = highlights
+    .map((h) => ({
+      start: Math.max(0, Math.min(maxLen, Number(h.start))),
+      end: Math.max(0, Math.min(maxLen, Number(h.end)))
+    }))
+    .filter((h) => Number.isFinite(h.start) && Number.isFinite(h.end) && h.end > h.start)
+    .sort((a, b) => a.start - b.start);
+
+  const merged = [];
+  cleaned.forEach((h) => {
+    const last = merged[merged.length - 1];
+    if (last && h.start <= last.end) {
+      last.end = Math.max(last.end, h.end);
+    } else {
+      merged.push({ start: h.start, end: h.end });
+    }
+  });
+  return merged;
+}
+
+function escapeHtml(text) {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function renderHighlights(container, text, highlights) {
+  const normalized = normalizeHighlights(highlights, text.length);
+  writeHighlights(highlightStorageKey(), normalized);
+  if (!normalized.length) {
+    container.textContent = text;
+    return;
+  }
+  let html = "";
+  let cursor = 0;
+  normalized.forEach((h, idx) => {
+    if (h.start > cursor) {
+      html += escapeHtml(text.slice(cursor, h.start));
+    }
+    const chunk = escapeHtml(text.slice(h.start, h.end));
+    html += `<span class="highlight" data-index="${idx}" data-start="${h.start}" data-end="${h.end}">${chunk}</span>`;
+    cursor = h.end;
+  });
+  if (cursor < text.length) {
+    html += escapeHtml(text.slice(cursor));
+  }
+  container.innerHTML = html;
+}
+
+function updateHighlightedViews() {
+  if (!currentResultText) return;
+  const highlights = readHighlights(highlightStorageKey());
+  renderHighlights(verseEl, currentResultText, highlights);
+  if (isZenOpen) {
+    renderHighlights(zenText, currentResultText, highlights);
+  }
 }
 
 function cleanText(text) {
@@ -211,7 +304,7 @@ async function fetchVerse() {
   const version = versionSelect.value;
   currentStudyParsed = parsed;
   currentStudyVersion = version;
-  trackEvent("search_chapter", { version, query: queryInput.value.trim() });
+  currentResultKey = buildCacheKey(parsed, version);
   trackEvent("search_verse", { version, query: queryInput.value.trim() });
   const verseQuery = parsed.verseEnd > parsed.verseStart
     ? `${parsed.verseStart}-${parsed.verseEnd}`
@@ -220,7 +313,7 @@ async function fetchVerse() {
   const search = `${bookQuery} ${parsed.chapter}:${verseQuery}`;
   const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(search)}&version=${version}`;
 
-  const cacheKey = buildCacheKey(parsed, version);
+  const cacheKey = currentResultKey;
   const cached = readCache(cacheKey);
   if (cached) {
     showResult(cached.text, cached.reference);
@@ -258,11 +351,13 @@ async function fetchChapter() {
   const version = versionSelect.value;
   currentStudyParsed = parsed;
   currentStudyVersion = version;
+  currentResultKey = buildChapterCacheKey(parsed, version);
+  trackEvent("search_chapter", { version, query: queryInput.value.trim() });
   const bookQuery = formatBookDisplay(parsed.book);
   const search = `${bookQuery} ${parsed.chapter}`;
   const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(search)}&version=${version}`;
 
-  const cacheKey = buildChapterCacheKey(parsed, version);
+  const cacheKey = currentResultKey;
   const cached = readCache(cacheKey);
   if (cached) {
     showResult(cached.text, cached.reference);
@@ -328,11 +423,12 @@ function showStatus(text, isError) {
 
 function showResult(text, reference) {
   statusEl.textContent = "";
-  verseEl.textContent = text;
+  currentResultText = text;
+  updateHighlightedViews();
   refEl.textContent = `— ${reference}`;
   resultEl.hidden = false;
   if (isZenOpen) {
-    zenText.textContent = text;
+    updateHighlightedViews();
     zenRef.textContent = `— ${reference}`;
   }
   persistLastQuery();
@@ -383,7 +479,7 @@ function restoreLastQuery() {
 
 function openZen() {
   if (resultEl.hidden) return;
-  zenText.textContent = verseEl.textContent;
+  updateHighlightedViews();
   zenRef.textContent = refEl.textContent;
   zenOverlay.hidden = false;
   isZenOpen = true;
@@ -765,6 +861,77 @@ function trackEvent(name, data) {
   }
 }
 
+function hideHighlightButton() {
+  if (!highlightBtn) return;
+  highlightBtn.hidden = true;
+  activeHighlightRange = null;
+  activeHighlightContainer = null;
+}
+
+function getSelectionOffsets(container, range) {
+  const startRange = range.cloneRange();
+  startRange.selectNodeContents(container);
+  startRange.setEnd(range.startContainer, range.startOffset);
+  const start = startRange.toString().length;
+
+  const endRange = range.cloneRange();
+  endRange.selectNodeContents(container);
+  endRange.setEnd(range.endContainer, range.endOffset);
+  const end = endRange.toString().length;
+  return { start, end };
+}
+
+function maybeShowHighlightButton(container) {
+  if (!highlightBtn) return;
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    hideHighlightButton();
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  if (!container.contains(range.commonAncestorContainer)) {
+    hideHighlightButton();
+    return;
+  }
+  const offsets = getSelectionOffsets(container, range);
+  if (offsets.end - offsets.start < 2) {
+    hideHighlightButton();
+    return;
+  }
+  activeHighlightRange = offsets;
+  activeHighlightContainer = container;
+  const rect = range.getBoundingClientRect();
+  const top = Math.max(12, rect.top + window.scrollY - 46);
+  const left = Math.min(window.innerWidth - 120, rect.left + window.scrollX);
+  highlightBtn.style.top = `${top}px`;
+  highlightBtn.style.left = `${left}px`;
+  highlightBtn.hidden = false;
+}
+
+function applyHighlight() {
+  if (!activeHighlightRange || !currentResultKey) return;
+  const highlights = readHighlights(highlightStorageKey());
+  highlights.push(activeHighlightRange);
+  writeHighlights(highlightStorageKey(), normalizeHighlights(highlights, currentResultText.length));
+  updateHighlightedViews();
+  const selection = window.getSelection();
+  if (selection && selection.removeAllRanges) selection.removeAllRanges();
+  hideHighlightButton();
+}
+
+function removeHighlightFromClick(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (!target.classList.contains("highlight")) return;
+  const start = Number(target.dataset.start);
+  const end = Number(target.dataset.end);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+  const highlights = readHighlights(highlightStorageKey());
+  const next = highlights.filter((h) => !(Number(h.start) === start && Number(h.end) === end));
+  writeHighlights(highlightStorageKey(), normalizeHighlights(next, currentResultText.length));
+  updateHighlightedViews();
+}
+
 addListener(studyDot, "click", () => openStudyEditorSheet("note"));
 addListener(studyActions, "click", (event) => {
   if (event.target === studyActions) closeStudyActions();
@@ -786,6 +953,17 @@ addListener(resultEl, "touchmove", onStudyTouchMove, { passive: true });
 addListener(resultEl, "touchend", onStudyTouchEnd, { passive: true });
 addListener(resultEl, "touchcancel", onStudyTouchEnd, { passive: true });
 addListener(resultEl, "mousedown", onStudyMouseDown);
+addListener(verseEl, "mouseup", () => maybeShowHighlightButton(verseEl));
+addListener(verseEl, "touchend", () => maybeShowHighlightButton(verseEl));
+addListener(verseEl, "click", removeHighlightFromClick);
+addListener(zenText, "mouseup", () => maybeShowHighlightButton(zenText));
+addListener(zenText, "touchend", () => maybeShowHighlightButton(zenText));
+addListener(zenText, "click", removeHighlightFromClick);
+addListener(document, "selectionchange", () => {
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed) hideHighlightButton();
+});
+addListener(highlightBtn, "click", applyHighlight);
 
 addListener(menuBtn, "click", openMenu);
 addListener(menuClose, "click", closeMenu);
