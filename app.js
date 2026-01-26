@@ -481,10 +481,10 @@ function restoreLastQuery() {
 
 function openZen() {
   if (resultEl.hidden) return;
+  isZenOpen = true;
   updateHighlightedViews();
   zenRef.textContent = refEl.textContent;
   zenOverlay.hidden = false;
-  isZenOpen = true;
   trackEvent("open_zen");
 }
 
@@ -934,12 +934,49 @@ function removeHighlightFromClick(event) {
   updateHighlightedViews();
 }
 
-function handleDoubleTap(container) {
+function getRangeFromPoint(x, y) {
+  if (document.caretRangeFromPoint) return document.caretRangeFromPoint(x, y);
+  if (document.caretPositionFromPoint) {
+    const pos = document.caretPositionFromPoint(x, y);
+    if (!pos) return null;
+    const range = document.createRange();
+    range.setStart(pos.offsetNode, pos.offset);
+    range.setEnd(pos.offsetNode, pos.offset);
+    return range;
+  }
+  return null;
+}
+
+function getWordOffsets(text, index) {
+  const isWordChar = (ch) => /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]/.test(ch);
+  let start = Math.max(0, Math.min(text.length, index));
+  let end = start;
+  while (start > 0 && isWordChar(text[start - 1])) start -= 1;
+  while (end < text.length && isWordChar(text[end])) end += 1;
+  return { start, end };
+}
+
+function highlightWordAtPoint(container, clientX, clientY) {
+  const range = getRangeFromPoint(clientX, clientY);
+  if (!range || !container.contains(range.startContainer)) return;
+  const offsets = getSelectionOffsets(container, range);
+  const word = getWordOffsets(container.textContent, offsets.end);
+  if (word.end - word.start < 2) return;
+  activeHighlightRange = word;
+  applyHighlight();
+}
+
+function handleDoubleTap(container, event) {
   const now = Date.now();
   const isDoubleTap = lastTapContainer === container && now - lastTapAt < 320;
   lastTapAt = now;
   lastTapContainer = container;
   if (!isDoubleTap) return;
+  const touch = event.changedTouches ? event.changedTouches[0] : null;
+  if (touch) {
+    highlightWordAtPoint(container, touch.clientX, touch.clientY);
+    return;
+  }
   maybeShowHighlightButton(container);
   applyHighlight();
 }
@@ -966,15 +1003,15 @@ addListener(resultEl, "touchend", onStudyTouchEnd, { passive: true });
 addListener(resultEl, "touchcancel", onStudyTouchEnd, { passive: true });
 addListener(resultEl, "mousedown", onStudyMouseDown);
 addListener(verseEl, "mouseup", () => maybeShowHighlightButton(verseEl));
-addListener(verseEl, "touchend", () => {
+addListener(verseEl, "touchend", (event) => {
   maybeShowHighlightButton(verseEl);
-  handleDoubleTap(verseEl);
+  handleDoubleTap(verseEl, event);
 });
 addListener(verseEl, "click", removeHighlightFromClick);
 addListener(zenText, "mouseup", () => maybeShowHighlightButton(zenText));
-addListener(zenText, "touchend", () => {
+addListener(zenText, "touchend", (event) => {
   maybeShowHighlightButton(zenText);
-  handleDoubleTap(zenText);
+  handleDoubleTap(zenText, event);
 });
 addListener(zenText, "click", removeHighlightFromClick);
 addListener(document, "selectionchange", () => {
