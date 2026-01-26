@@ -6,6 +6,20 @@ const versions = [
 
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24;
 const DAILY_VERSION = "RVR1960";
+const RECENT_LIMIT = 5;
+const BOOKS = [
+  "Génesis", "Éxodo", "Levítico", "Números", "Deuteronomio",
+  "Josué", "Jueces", "Rut", "1 Samuel", "2 Samuel", "1 Reyes", "2 Reyes",
+  "1 Crónicas", "2 Crónicas", "Esdras", "Nehemías", "Ester", "Job", "Salmos",
+  "Proverbios", "Eclesiastés", "Cantares", "Isaías", "Jeremías", "Lamentaciones",
+  "Ezequiel", "Daniel", "Oseas", "Joel", "Amós", "Abdías", "Jonás", "Miqueas",
+  "Nahúm", "Habacuc", "Sofonías", "Hageo", "Zacarías", "Malaquías",
+  "Mateo", "Marcos", "Lucas", "Juan", "Hechos", "Romanos", "1 Corintios",
+  "2 Corintios", "Gálatas", "Efesios", "Filipenses", "Colosenses",
+  "1 Tesalonicenses", "2 Tesalonicenses", "1 Timoteo", "2 Timoteo",
+  "Tito", "Filemón", "Hebreos", "Santiago", "1 Pedro", "2 Pedro",
+  "1 Juan", "2 Juan", "3 Juan", "Judas", "Apocalipsis"
+];
 
 const unwantedTexts = [
   "Read the Bible", "Leer la Biblia",
@@ -38,6 +52,7 @@ const statusEl = document.getElementById("status");
 const resultEl = document.getElementById("result");
 const verseEl = document.getElementById("verseText");
 const refEl = document.getElementById("reference");
+const querySuggestions = document.getElementById("querySuggestions");
 const studyDot = document.getElementById("studyDot");
 const studyActions = document.getElementById("studyActions");
 const studyActionNote = document.getElementById("studyActionNote");
@@ -238,6 +253,80 @@ function cleanText(text) {
   });
   cleaned = cleaned.replace(/\s+/g, " ").trim();
   return cleaned;
+}
+
+function normalizeForMatch(text) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getRecentQueries() {
+  try {
+    const raw = localStorage.getItem("recentQueries");
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentQuery(query) {
+  const cleaned = query.trim();
+  if (!cleaned) return;
+  const current = getRecentQueries().filter((q) => q !== cleaned);
+  current.unshift(cleaned);
+  const trimmed = current.slice(0, RECENT_LIMIT);
+  try {
+    localStorage.setItem("recentQueries", JSON.stringify(trimmed));
+  } catch {
+    // ignore
+  }
+}
+
+function buildSuggestionGroup(title, items) {
+  if (!items.length) return "";
+  const list = items
+    .map((item) => `<button type="button" class="suggestion-item" data-value="${item}">${item}</button>`)
+    .join("");
+  return `<div class="suggestion-group"><div class="suggestion-title">${title}</div>${list}</div>`;
+}
+
+function updateSuggestions() {
+  if (!querySuggestions) return;
+  const raw = queryInput.value || "";
+  const input = normalizeForMatch(raw);
+  if (!input) {
+    querySuggestions.hidden = true;
+    querySuggestions.innerHTML = "";
+    return;
+  }
+
+  const bookMatches = BOOKS.filter((book) =>
+    normalizeForMatch(book).startsWith(input)
+  ).slice(0, RECENT_LIMIT);
+
+  const recentMatches = getRecentQueries()
+    .filter((q) => normalizeForMatch(q).includes(input))
+    .slice(0, RECENT_LIMIT);
+
+  const html = [
+    buildSuggestionGroup("Libros", bookMatches.map((b) => `${b} `)),
+    buildSuggestionGroup("Recientes", recentMatches)
+  ].filter(Boolean).join("");
+
+  if (!html) {
+    querySuggestions.hidden = true;
+    querySuggestions.innerHTML = "";
+    return;
+  }
+
+  querySuggestions.innerHTML = html;
+  querySuggestions.hidden = false;
 }
 
 function extractByClassPattern(container, verseStart, verseEnd) {
@@ -470,6 +559,7 @@ function persistLastQuery() {
   } catch {
     // ignore storage errors
   }
+  saveRecentQuery(payload.query);
 }
 
 function restoreLastQuery() {
@@ -1115,6 +1205,23 @@ addListener(helpOverlay, "click", (event) => {
 });
 window.addEventListener("appinstalled", () => {
   trackEvent("app_installed");
+});
+
+addListener(queryInput, "input", updateSuggestions);
+addListener(queryInput, "focus", updateSuggestions);
+addListener(document, "click", (event) => {
+  if (!querySuggestions) return;
+  if (event.target === queryInput || querySuggestions.contains(event.target)) return;
+  querySuggestions.hidden = true;
+});
+addListener(querySuggestions, "click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (!target.classList.contains("suggestion-item")) return;
+  const value = target.dataset.value || "";
+  queryInput.value = value;
+  queryInput.focus();
+  querySuggestions.hidden = true;
 });
 
 initVersions();
