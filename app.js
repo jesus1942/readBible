@@ -757,10 +757,10 @@ function startStudyPress(x, y) {
   studyPressStartX = x;
   studyPressStartY = y;
   studyPressActive = true;
-  resultEl.classList.add("no-select");
   studyPressTimer = setTimeout(() => {
     studyPressTimer = null;
     if (!studyPressActive) return;
+    resultEl.classList.add("no-select");
     openStudyActions();
   }, 520);
 }
@@ -961,7 +961,22 @@ addListener(zenText, "touchend", () => maybeShowHighlightButton(zenText));
 addListener(zenText, "click", removeHighlightFromClick);
 addListener(document, "selectionchange", () => {
   const selection = window.getSelection();
-  if (!selection || selection.isCollapsed) hideHighlightButton();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    hideHighlightButton();
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  if (verseEl && verseEl.contains(range.commonAncestorContainer)) {
+    maybeShowHighlightButton(verseEl);
+    cancelStudyPress();
+    return;
+  }
+  if (zenText && zenText.contains(range.commonAncestorContainer)) {
+    maybeShowHighlightButton(zenText);
+    cancelStudyPress();
+    return;
+  }
+  hideHighlightButton();
 });
 addListener(highlightBtn, "click", applyHighlight);
 
