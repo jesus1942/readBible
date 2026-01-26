@@ -93,6 +93,11 @@ let activeHighlightRange = null;
 let activeHighlightContainer = null;
 let lastTapAt = 0;
 let lastTapContainer = null;
+let highlightTouchStartRange = null;
+let highlightTouchStartX = 0;
+let highlightTouchStartY = 0;
+let highlightTouchMoved = false;
+let highlightTouchContainer = null;
 
 function initVersions() {
   versions.forEach((v) => {
@@ -981,6 +986,64 @@ function handleDoubleTap(container, event) {
   applyHighlight();
 }
 
+function startHighlightTouch(container, event) {
+  const touch = event.touches ? event.touches[0] : null;
+  if (!touch) return;
+  const range = getRangeFromPoint(touch.clientX, touch.clientY);
+  if (!range || !container.contains(range.startContainer)) return;
+  highlightTouchStartRange = range;
+  highlightTouchStartX = touch.clientX;
+  highlightTouchStartY = touch.clientY;
+  highlightTouchMoved = false;
+  highlightTouchContainer = container;
+}
+
+function moveHighlightTouch(event) {
+  const touch = event.touches ? event.touches[0] : null;
+  if (!touch || !highlightTouchStartRange || !highlightTouchContainer) return;
+  const dx = Math.abs(touch.clientX - highlightTouchStartX);
+  const dy = Math.abs(touch.clientY - highlightTouchStartY);
+  if (dx > 6 || dy > 6) {
+    highlightTouchMoved = true;
+    cancelStudyPress();
+  }
+}
+
+function endHighlightTouch(event) {
+  const touch = event.changedTouches ? event.changedTouches[0] : null;
+  if (!touch || !highlightTouchMoved || !highlightTouchStartRange || !highlightTouchContainer) {
+    highlightTouchStartRange = null;
+    highlightTouchContainer = null;
+    highlightTouchMoved = false;
+    return;
+  }
+  const endRange = getRangeFromPoint(touch.clientX, touch.clientY);
+  if (!endRange || !highlightTouchContainer.contains(endRange.startContainer)) {
+    highlightTouchStartRange = null;
+    highlightTouchContainer = null;
+    highlightTouchMoved = false;
+    return;
+  }
+  const combined = document.createRange();
+  try {
+    combined.setStart(highlightTouchStartRange.startContainer, highlightTouchStartRange.startOffset);
+    combined.setEnd(endRange.startContainer, endRange.startOffset);
+  } catch {
+    highlightTouchStartRange = null;
+    highlightTouchContainer = null;
+    highlightTouchMoved = false;
+    return;
+  }
+  const offsets = getSelectionOffsets(highlightTouchContainer, combined);
+  if (offsets.end - offsets.start >= 2) {
+    activeHighlightRange = offsets;
+    applyHighlight();
+  }
+  highlightTouchStartRange = null;
+  highlightTouchContainer = null;
+  highlightTouchMoved = false;
+}
+
 addListener(studyDot, "click", () => openStudyEditorSheet("note"));
 addListener(studyActions, "click", (event) => {
   if (event.target === studyActions) closeStudyActions();
@@ -1003,15 +1066,17 @@ addListener(resultEl, "touchend", onStudyTouchEnd, { passive: true });
 addListener(resultEl, "touchcancel", onStudyTouchEnd, { passive: true });
 addListener(resultEl, "mousedown", onStudyMouseDown);
 addListener(verseEl, "mouseup", () => maybeShowHighlightButton(verseEl));
+addListener(verseEl, "touchstart", (event) => startHighlightTouch(verseEl, event));
+addListener(verseEl, "touchmove", moveHighlightTouch);
 addListener(verseEl, "touchend", (event) => {
-  maybeShowHighlightButton(verseEl);
-  handleDoubleTap(verseEl, event);
+  endHighlightTouch(event);
 });
 addListener(verseEl, "click", removeHighlightFromClick);
 addListener(zenText, "mouseup", () => maybeShowHighlightButton(zenText));
+addListener(zenText, "touchstart", (event) => startHighlightTouch(zenText, event));
+addListener(zenText, "touchmove", moveHighlightTouch);
 addListener(zenText, "touchend", (event) => {
-  maybeShowHighlightButton(zenText);
-  handleDoubleTap(zenText, event);
+  endHighlightTouch(event);
 });
 addListener(zenText, "click", removeHighlightFromClick);
 addListener(document, "selectionchange", () => {
