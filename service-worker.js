@@ -1,4 +1,4 @@
-const CACHE_NAME = "bibleapp-pwa-v51";
+const CACHE_NAME = "bibleapp-pwa-v52";
 const ASSETS = [
   "./",
   "./index.html",
