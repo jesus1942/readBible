@@ -70,12 +70,7 @@
     </div>
 
     <div id="splash" class="splash" hidden>
-      <div class="splash-card">
-        <p class="splash-title">BIBLEAPP</p>
-        <p class="splash-subtitle">Versiculos vivos, lectura plena</p>
-        <div class="splash-spinner" aria-hidden="true"></div>
-        <p class="splash-hint">Cargando...</p>
-      </div>
+      <canvas id="splashCanvas" class="splash-canvas" aria-hidden="true"></canvas>
     </div>
 
     <div id="dailyVerse" class="daily" hidden>
@@ -171,7 +166,7 @@
       data-website-id="76cecf2a-92bb-43d2-ae8f-053da8117110"
       data-host-url="https://umami-production-b559.up.railway.app"
     ></script>
-    <script src="app.js?v=38"></script>
+    <script src="app.js?v=39"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;

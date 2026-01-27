@@ -91,6 +91,7 @@ const dailyClose = document.getElementById("dailyClose");
 const namePrompt = document.getElementById("namePrompt");
 const nameInput = document.getElementById("nameInput");
 const saveNameBtn = document.getElementById("saveNameBtn");
+const splashCanvas = document.getElementById("splashCanvas");
 let touchStartX = 0;
 let touchStartY = 0;
 let isZenOpen = false;
@@ -113,6 +114,7 @@ let highlightTouchStartX = 0;
 let highlightTouchStartY = 0;
 let highlightTouchMoved = false;
 let highlightTouchContainer = null;
+let splashAnimationStarted = false;
 
 function initVersions() {
   versions.forEach((v) => {
@@ -1289,6 +1291,414 @@ function initSplash() {
   const timer = setTimeout(() => closeSplash(timer), 2800);
   splash.addEventListener("click", () => closeSplash(timer), { once: true });
   splash.addEventListener("touchstart", () => closeSplash(timer), { once: true });
+  startSplashAnimation();
+}
+
+function startSplashAnimation() {
+  if (splashAnimationStarted || !splashCanvas) return;
+  splashAnimationStarted = true;
+
+  const canvas = splashCanvas;
+  const ctx = canvas.getContext("2d", { alpha: false });
+
+  const DPR = () => Math.min(2, window.devicePixelRatio || 1);
+  let W = 0;
+  let H = 0;
+  let dpr = 1;
+
+  function resize() {
+    dpr = DPR();
+    W = Math.floor(window.innerWidth * dpr);
+    H = Math.floor(window.innerHeight * dpr);
+    canvas.width = W;
+    canvas.height = H;
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  const isCoarse = window.matchMedia("(pointer: coarse)").matches;
+  const isSmall = window.matchMedia("(max-width: 700px)").matches;
+  const isMobile = isCoarse || isSmall;
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const BG = {
+    a: [58, 42, 24],
+    b: [178, 122, 51],
+    c: [242, 192, 96]
+  };
+
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const smooth = (t) => t * t * (3 - 2 * t);
+  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+  const easeInOutCubic = (t) => t < 0.5
+    ? 4 * t * t * t
+    : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const rand = (min, max) => min + Math.random() * (max - min);
+
+  const SVG_LOGO = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3a2a18"/>
+      <stop offset="50%" stop-color="#b27a33"/>
+      <stop offset="100%" stop-color="#f2c060"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <radialGradient id="centerGlow" cx="50%" cy="40%" r="40%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="0" y="0" width="512" height="512" rx="90" ry="90" fill="url(#bgGradient)"/>
+  <ellipse cx="256" cy="220" rx="120" ry="160" fill="url(#centerGlow)"/>
+  <g transform="translate(256, 240)" filter="url(#glow)">
+    <circle cx="0" cy="-160" r="16" fill="#ffffff"/>
+    <circle cx="0" cy="-110" r="12" fill="#ffffff"/>
+    <circle cx="0" cy="-55" r="24" fill="#ffffff"/>
+    <circle cx="0" cy="5" r="12" fill="#ffffff"/>
+    <circle cx="0" cy="65" r="12" fill="#ffffff"/>
+    <circle cx="0" cy="125" r="12" fill="#ffffff"/>
+    <circle cx="0" cy="185" r="16" fill="#ffffff"/>
+    <circle cx="-110" cy="-55" r="16" fill="#ffffff"/>
+    <circle cx="-55" cy="-55" r="12" fill="#ffffff"/>
+    <circle cx="55" cy="-55" r="12" fill="#ffffff"/>
+    <circle cx="110" cy="-55" r="16" fill="#ffffff"/>
+  </g>
+</svg>`;
+
+  const logoImg = new Image();
+  logoImg.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(SVG_LOGO);
+
+  const crossCircles = [
+    { x: 0, y: -160, r: 16 },
+    { x: 0, y: -110, r: 12 },
+    { x: 0, y: -55, r: 24 },
+    { x: 0, y: 5, r: 12 },
+    { x: 0, y: 65, r: 12 },
+    { x: 0, y: 125, r: 12 },
+    { x: 0, y: 185, r: 16 },
+    { x: -110, y: -55, r: 16 },
+    { x: -55, y: -55, r: 12 },
+    { x: 55, y: -55, r: 12 },
+    { x: 110, y: -55, r: 16 }
+  ];
+
+  function buildCrossTargets(pxScale, density) {
+    const targets = [];
+    crossCircles.forEach((c) => {
+      const area = Math.PI * c.r * c.r;
+      const n = Math.floor(area * density);
+      for (let i = 0; i < n; i += 1) {
+        const t = Math.random() * Math.PI * 2;
+        const u = Math.random();
+        const rr = Math.sqrt(u) * c.r;
+        targets.push({
+          x: (c.x + Math.cos(t) * rr) * pxScale,
+          y: (c.y + Math.sin(t) * rr) * pxScale
+        });
+      }
+    });
+    const step = isMobile ? 8 : 6;
+    for (let y = -160; y <= 185; y += step) targets.push({ x: 0 * pxScale, y: y * pxScale });
+    for (let x = -110; x <= 110; x += step) targets.push({ x: x * pxScale, y: -55 * pxScale });
+    return targets;
+  }
+
+  let particles = [];
+  let crossTargets = [];
+
+  const DUR_GALAXY = prefersReducedMotion ? 0.25 : 1.2;
+  const DUR_SPHERE = prefersReducedMotion ? 0.15 : 0.6;
+  const DUR_IMPLODE = prefersReducedMotion ? 0.35 : 1.2;
+  const DUR_HOLD = prefersReducedMotion ? 0.25 : 0.8;
+  const TOTAL = DUR_GALAXY + DUR_SPHERE + DUR_IMPLODE + DUR_HOLD;
+
+  function particleBudget() {
+    if (isMobile) {
+      return {
+        cross: clamp(Math.floor((W * H) / (900 * 900) * 680), 560, 860),
+        bg: 140,
+        halo: 14 * dpr
+      };
+    }
+    return {
+      cross: clamp(Math.floor((W * H) / (900 * 900) * 1150), 900, 1500),
+      bg: 260,
+      halo: 22 * dpr
+    };
+  }
+
+  let startTime = performance.now();
+  let lastNow = performance.now();
+  let finished = false;
+
+  function init() {
+    const budget = particleBudget();
+    const logoHeightSvg = 420;
+    const desiredLogoH = Math.min(H * 0.44, W * 0.44);
+    const pxScale = desiredLogoH / logoHeightSvg;
+
+    const density = isMobile ? 1.9 : 2.5;
+    crossTargets = buildCrossTargets(pxScale, density);
+
+    const CROSS_N = Math.min(budget.cross, crossTargets.length);
+    const BG_N = budget.bg;
+    const N = CROSS_N + BG_N;
+
+    const targets = crossTargets.slice();
+    for (let i = targets.length - 1; i > 0; i -= 1) {
+      const j = (Math.random() * (i + 1)) | 0;
+      [targets[i], targets[j]] = [targets[j], targets[i]];
+    }
+
+    particles = new Array(N).fill(0).map((_, i) => {
+      const arm = i % 3;
+      const ang0 = rand(0, Math.PI * 2) + arm * (Math.PI * 2 / 3);
+      const rad0 = Math.pow(Math.random(), 0.55);
+      const r = rad0;
+      const twist = 7.0;
+      const theta = ang0 + r * twist;
+      const y = rand(-0.13, 0.13) * (1 - r);
+      const x = Math.cos(theta) * r;
+      const z = Math.sin(theta) * r;
+
+      const phi = Math.acos(rand(-1, 1));
+      const th = rand(0, Math.PI * 2);
+
+      const isCross = i < CROSS_N;
+      const tgt = targets[i % targets.length];
+
+      return {
+        x, y, z,
+        vx: 0, vy: 0, vz: 0,
+        phi, th,
+        size: isCross ? rand(1.0, 2.0) : rand(0.7, 1.4),
+        alpha: isCross ? rand(0.55, 1.0) : rand(0.12, 0.5),
+        tx: tgt.x,
+        ty: tgt.y,
+        isCross
+      };
+    });
+
+    startTime = performance.now();
+    lastNow = startTime;
+    finished = false;
+  }
+
+  function project(p, cx, cy, scale, rotY, rotX) {
+    const cyy = Math.cos(rotY);
+    const syy = Math.sin(rotY);
+    const x1 = p.x * cyy + p.z * syy;
+    const z1 = -p.x * syy + p.z * cyy;
+
+    const cxx = Math.cos(rotX);
+    const sxx = Math.sin(rotX);
+    const y2 = p.y * cxx - z1 * sxx;
+    const z2 = p.y * sxx + z1 * cxx;
+
+    const persp = 1.6;
+    const k = scale / (persp - z2);
+    return { sx: cx + x1 * k, sy: cy + y2 * k, z: z2 };
+  }
+
+  function drawBackground() {
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, `rgb(${BG.a.join(",")})`);
+    g.addColorStop(0.5, `rgb(${BG.b.join(",")})`);
+    g.addColorStop(1, `rgb(${BG.c.join(",")})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    const rg = ctx.createRadialGradient(W * 0.5, H * 0.4, 0, W * 0.5, H * 0.4, Math.min(W, H) * 0.3);
+    rg.addColorStop(0, isMobile ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.16)");
+    rg.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = rg;
+    ctx.fillRect(0, 0, W, H);
+
+    const vg = ctx.createRadialGradient(W * 0.5, H * 0.5, Math.min(W, H) * 0.25, W * 0.5, H * 0.5, Math.max(W, H) * 0.8);
+    vg.addColorStop(0, "rgba(0,0,0,0)");
+    vg.addColorStop(1, "rgba(0,0,0,0.35)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  function getPhase(t) {
+    if (t < DUR_GALAXY) return { id: 0, k: t / DUR_GALAXY };
+    if (t < DUR_GALAXY + DUR_SPHERE) return { id: 1, k: (t - DUR_GALAXY) / DUR_SPHERE };
+    if (t < DUR_GALAXY + DUR_SPHERE + DUR_IMPLODE) {
+      return { id: 2, k: (t - DUR_GALAXY - DUR_SPHERE) / DUR_IMPLODE };
+    }
+    return { id: 3, k: (t - DUR_GALAXY - DUR_SPHERE - DUR_IMPLODE) / DUR_HOLD };
+  }
+
+  function springTo(p, tx, ty, tz, strength, damping, dt) {
+    const ax = (tx - p.x) * strength;
+    const ay = (ty - p.y) * strength;
+    const az = (tz - p.z) * strength;
+
+    p.vx = (p.vx + ax * dt) * damping;
+    p.vy = (p.vy + ay * dt) * damping;
+    p.vz = (p.vz + az * dt) * damping;
+
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.z += p.vz * dt;
+  }
+
+  function drawLogoOverlay(cx, cy, sizePx, alpha) {
+    if (!logoImg.complete) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = "rgba(255,255,255,0.45)";
+    ctx.shadowBlur = (isMobile ? 10 : 16) * dpr;
+    const x = cx - sizePx / 2;
+    const y = cy - sizePx / 2;
+    ctx.drawImage(logoImg, x, y, sizePx, sizePx);
+    ctx.restore();
+  }
+
+  function step(now) {
+    const dt = clamp((now - lastNow) / 1000, 0, 0.033);
+    lastNow = now;
+    const t = (now - startTime) / 1000;
+    const tt = clamp(t, 0, TOTAL);
+    const ph = getPhase(tt);
+
+    drawBackground();
+
+    const cx = W * 0.5;
+    const cy = H * 0.47;
+
+    const budget = particleBudget();
+    const sphereRadiusPx = Math.min(W, H) * 0.19;
+    const logoSize = Math.min(W, H) * (isMobile ? 0.46 : 0.4);
+
+    const rotBrake = ph.id >= 2 ? lerp(1, 0.1, smooth(clamp((ph.k - 0.35) / 0.65, 0, 1))) : 1;
+    const rotY = (tt * 3.2) * 0.18 * rotBrake;
+    const rotX = (Math.sin(tt * 2.0) * 0.18) * rotBrake;
+
+    const toSphere = ph.id === 0 ? smooth(ph.k) : 1;
+    const implodeT = ph.id === 2 ? easeInOutCubic(ph.k) : (ph.id > 2 ? 1 : 0);
+    const snap = ph.id === 3 ? 1 : clamp((implodeT - 0.88) / 0.12, 0, 1);
+    const logoFade = ph.id === 2 ? smooth(clamp((ph.k - 0.55) / 0.45, 0, 1)) : (ph.id === 3 ? 1 : 0);
+    const particlesDim = ph.id === 3 ? lerp(0.55, 0.2, smooth(ph.k)) : lerp(1, 0.55, logoFade);
+
+    const projected = [];
+
+    for (let i = 0; i < particles.length; i += 1) {
+      const p = particles[i];
+      const th = p.th + tt * 2.1;
+      const phi = p.phi;
+      const sx = Math.cos(th) * Math.sin(phi);
+      const sy = Math.cos(phi) * 0.85;
+      const sz = Math.sin(th) * Math.sin(phi);
+
+      const rr = Math.sqrt(p.x * p.x + p.z * p.z);
+      const swirlAng = rr * 7.4 + tt * 6.0;
+      const gx = Math.cos(swirlAng) * rr;
+      const gz = Math.sin(swirlAng) * rr;
+      const gy = p.y;
+
+      let bx = lerp(gx, sx, toSphere);
+      let by = lerp(gy, sy, toSphere);
+      let bz = lerp(gz, sz, toSphere);
+
+      const txN = p.tx / sphereRadiusPx;
+      const tyN = p.ty / sphereRadiusPx;
+
+      if (implodeT > 0) {
+        if (p.isCross) {
+          const strength = lerp(40, 95, implodeT);
+          const damping = lerp(0.86, 0.8, implodeT);
+          if (ph.id === 2 && implodeT < 0.08) {
+            p.x = bx; p.y = by; p.z = bz;
+            p.vx = p.vy = p.vz = 0;
+          }
+          springTo(p, txN, tyN, 0, strength, damping, dt);
+          if (snap > 0) {
+            p.x = lerp(p.x, txN, snap);
+            p.y = lerp(p.y, tyN, snap);
+            p.z = lerp(p.z, 0, snap);
+            p.vx = p.vy = p.vz = 0;
+          }
+          bx = p.x; by = p.y; bz = p.z;
+        } else {
+          bx = lerp(bx, 0, implodeT);
+          by = lerp(by, 0, implodeT);
+          bz = lerp(bz, 0, implodeT);
+        }
+      }
+
+      const breath = 1 + Math.sin(tt * 5.0 + i * 0.002) * 0.012;
+      const pr = project({ x: bx, y: by, z: bz }, cx, cy, sphereRadiusPx * breath, rotY, rotX);
+
+      let a = p.alpha;
+      if (implodeT > 0) {
+        if (p.isCross) a *= lerp(1.0, 1.35, implodeT);
+        else a *= lerp(1.0, 0.02, smooth(implodeT));
+      }
+      a *= particlesDim;
+
+      const sBoost = p.isCross ? lerp(1.0, 1.2, smooth(implodeT)) : 1.0;
+      const size = (p.size * dpr) * (0.85 + pr.z * 0.0) * sBoost;
+
+      projected.push({ x: pr.sx, y: pr.sy, z: pr.z, a: clamp(a, 0, 1), s: size, isCross: p.isCross });
+    }
+
+    projected.sort((a, b) => a.z - b.z);
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    projected.forEach((q) => {
+      if (q.a <= 0.002) return;
+      ctx.globalAlpha = q.a;
+      ctx.fillStyle = q.isCross ? "rgba(255,248,235,1)" : "rgba(255,255,255,1)";
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, q.s, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+
+    if (implodeT > 0.7) {
+      ctx.save();
+      ctx.globalAlpha = (isMobile ? 0.14 : 0.2) * smooth(clamp((implodeT - 0.7) / 0.3, 0, 1));
+      ctx.globalCompositeOperation = "screen";
+      ctx.shadowColor = "rgba(255,255,255,0.60)";
+      ctx.shadowBlur = budget.halo;
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      const logoHeightSvg = 420;
+      const desiredLogoH = Math.min(H * 0.44, W * 0.44);
+      const logoScale = desiredLogoH / logoHeightSvg;
+      ctx.translate(cx, cy);
+      crossCircles.forEach((c) => {
+        ctx.beginPath();
+        ctx.arc(c.x * logoScale, c.y * logoScale, c.r * logoScale, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+
+    if (logoFade > 0) {
+      drawLogoOverlay(cx, cy, logoSize, easeOutCubic(logoFade));
+    }
+
+    if (!finished && t >= TOTAL) {
+      finished = true;
+      return;
+    }
+
+    requestAnimationFrame(step);
+  }
+
+  init();
+  requestAnimationFrame(step);
 }
 
 function initNamePrompt() {
