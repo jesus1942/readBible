@@ -79,6 +79,8 @@ const helpOverlay = document.getElementById("helpOverlay");
 const helpClose = document.getElementById("helpClose");
 const analytics = typeof window !== "undefined" ? window.umami : null;
 const highlightBtn = document.getElementById("highlightBtn");
+const themeCheckboxes = Array.from(document.querySelectorAll(".theme-chip input"));
+const themesSave = document.getElementById("themesSave");
 
 const zenOverlay = document.getElementById("zenOverlay");
 const zenText = document.getElementById("zenText");
@@ -120,6 +122,7 @@ let splashAnimationStarted = false;
 let textSuggestTimer = null;
 let lastTextSuggestQuery = "";
 let textSuggestResults = [];
+let userSeed = null;
 
 function initVersions() {
   versions.forEach((v) => {
@@ -163,6 +166,59 @@ function sanitizeReferenceString(reference) {
   let cleaned = reference.split(";")[0].trim();
   cleaned = cleaned.replace(/\s+/g, " ");
   return cleaned;
+}
+
+function getUserSeed() {
+  if (userSeed) return userSeed;
+  try {
+    const stored = localStorage.getItem("userSeed");
+    if (stored) {
+      userSeed = stored;
+      return stored;
+    }
+    const created = `u_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    localStorage.setItem("userSeed", created);
+    userSeed = created;
+    return created;
+  } catch {
+    userSeed = `u_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    return userSeed;
+  }
+}
+
+function getSelectedThemes() {
+  try {
+    const raw = localStorage.getItem("dailyThemes");
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function setSelectedThemes(themes) {
+  try {
+    localStorage.setItem("dailyThemes", JSON.stringify(themes));
+  } catch {
+    // ignore
+  }
+}
+
+function simpleHash(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function dailyIndexForUser(dayIndex, total) {
+  const seed = getUserSeed();
+  const themes = getSelectedThemes().join("|");
+  const key = `${seed}|${themes}|${dayIndex}`;
+  return simpleHash(key) % total;
 }
 
 function highlightStorageKey() {
@@ -1287,6 +1343,18 @@ addListener(querySuggestions, "click", (event) => {
   querySuggestions.hidden = true;
 });
 
+if (themeCheckboxes.length) {
+  const saved = getSelectedThemes();
+  themeCheckboxes.forEach((cb) => {
+    cb.checked = saved.includes(cb.value);
+  });
+  addListener(themesSave, "click", () => {
+    const selected = themeCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+    setSelectedThemes(selected);
+    showDailyVerse();
+  });
+}
+
 initVersions();
 restoreLastQuery();
 initSplash();
@@ -1798,7 +1866,8 @@ async function showDailyVerse() {
   try {
     const verses = await fetchJson("daily_verses.json");
     const dayIndex = dayOfYearIndex();
-    const verse = verses[dayIndex % verses.length];
+    const idx = dailyIndexForUser(dayIndex, verses.length);
+    const verse = verses[idx];
     const reference = sanitizeReferenceString(verse.reference || "");
     let verseText = verse.text || "";
     if (!verseText && reference) {
