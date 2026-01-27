@@ -21,6 +21,8 @@ const BOOKS = [
   "1 Juan", "2 Juan", "3 Juan", "Judas", "Apocalipsis"
 ];
 
+const TEXT_SUGGEST_LIMIT = 6;
+
 const unwantedTexts = [
   "Read the Bible", "Leer la Biblia",
   "StudyTools", "Herramientas",
@@ -115,6 +117,9 @@ let highlightTouchStartY = 0;
 let highlightTouchMoved = false;
 let highlightTouchContainer = null;
 let splashAnimationStarted = false;
+let textSuggestTimer = null;
+let lastTextSuggestQuery = "";
+let textSuggestResults = [];
 
 function initVersions() {
   versions.forEach((v) => {
@@ -316,9 +321,12 @@ function updateSuggestions() {
     .filter((q) => normalizeForMatch(q).includes(input))
     .slice(0, RECENT_LIMIT);
 
+  const textMatches = isTextSearchInput(raw) ? textSuggestResults : [];
+
   const html = [
     buildSuggestionGroup("Libros", bookMatches.map((b) => `${b} `)),
-    buildSuggestionGroup("Recientes", recentMatches)
+    buildSuggestionGroup("Recientes", recentMatches),
+    buildSuggestionGroup("Texto", textMatches)
   ].filter(Boolean).join("");
 
   if (!html) {
@@ -329,6 +337,53 @@ function updateSuggestions() {
 
   querySuggestions.innerHTML = html;
   querySuggestions.hidden = false;
+}
+
+function isTextSearchInput(raw) {
+  const trimmed = raw.trim();
+  if (trimmed.length < 24) return false;
+  if (/\d+\s*:\s*\d+/.test(trimmed)) return false;
+  return true;
+}
+
+function parseQuickSearchRefs(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const refs = [];
+  doc.querySelectorAll(".bible-item .bible-item-title a").forEach((a) => {
+    const text = a.textContent.trim();
+    if (!text) return;
+    if (text === "In Context" || text === "Full Chapter") return;
+    if (!/\d+:\d+/.test(text)) return;
+    refs.push(text);
+  });
+  return Array.from(new Set(refs)).slice(0, TEXT_SUGGEST_LIMIT);
+}
+
+async function fetchTextSuggestions(query) {
+  const search = query.trim();
+  if (!search) return [];
+  const url = `https://www.biblegateway.com/quicksearch/?quicksearch=${encodeURIComponent(search)}&version=${DAILY_VERSION}&searchtype=all`;
+  const fetchUrls = buildFetchUrls(url);
+  const html = await fetchFirstHtml(fetchUrls, 7000);
+  if (!html) return [];
+  return parseQuickSearchRefs(html);
+}
+
+function requestTextSuggestions(raw) {
+  const query = raw.trim();
+  if (!isTextSearchInput(query)) return;
+  if (query === lastTextSuggestQuery) return;
+  lastTextSuggestQuery = query;
+  if (textSuggestTimer) clearTimeout(textSuggestTimer);
+  textSuggestTimer = setTimeout(async () => {
+    try {
+      const results = await fetchTextSuggestions(query);
+      textSuggestResults = results;
+      updateSuggestions();
+    } catch {
+      // ignore
+    }
+  }, 350);
 }
 
 function extractByClassPattern(container, verseStart, verseEnd) {
@@ -1209,8 +1264,14 @@ window.addEventListener("appinstalled", () => {
   trackEvent("app_installed");
 });
 
-addListener(queryInput, "input", updateSuggestions);
-addListener(queryInput, "focus", updateSuggestions);
+addListener(queryInput, "input", () => {
+  updateSuggestions();
+  requestTextSuggestions(queryInput.value);
+});
+addListener(queryInput, "focus", () => {
+  updateSuggestions();
+  requestTextSuggestions(queryInput.value);
+});
 addListener(document, "click", (event) => {
   if (!querySuggestions) return;
   if (event.target === queryInput || querySuggestions.contains(event.target)) return;
