@@ -503,6 +503,18 @@ function parseChapterHTML(html) {
   return text || null;
 }
 
+function isNoResults(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  if (doc.querySelector(".no-results, .no-results__body, .search-no-results")) return true;
+  const text = (doc.body && doc.body.textContent ? doc.body.textContent : "").toLowerCase();
+  return (
+    text.includes("no results found") ||
+    text.includes("no se encontraron resultados") ||
+    text.includes("sin resultados") ||
+    text.includes("no results")
+  );
+}
+
 async function fetchVerse() {
   const parsed = parseReference(queryInput.value);
   if (!parsed) {
@@ -535,6 +547,10 @@ async function fetchVerse() {
     const html = await fetchFirstHtml(fetchUrls, 7000);
     if (!html) {
       showStatus("No se pudo obtener contenido del servidor.", true);
+      return;
+    }
+    if (isNoResults(html)) {
+      showStatus("No existe esa referencia.", true);
       return;
     }
     const verseText = parseHTML(html, parsed);
@@ -579,6 +595,10 @@ async function fetchChapter() {
     const html = await fetchFirstHtml(fetchUrls, 7000);
     if (!html) {
       showStatus("No se pudo obtener contenido del servidor.", true);
+      return;
+    }
+    if (isNoResults(html)) {
+      showStatus("No existe ese capitulo.", true);
       return;
     }
     const chapterText = parseChapterHTML(html);
