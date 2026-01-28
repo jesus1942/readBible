@@ -241,8 +241,22 @@ function startVoiceSearch() {
   };
   speechRecognition.onerror = () => {
     showStatus("No se pudo escuchar el audio.", true);
+    try {
+      speechRecognition.stop();
+    } catch {
+      // ignore
+    }
   };
+  const stopTimer = setTimeout(() => {
+    try {
+      speechRecognition.stop();
+    } catch {
+      // ignore
+    }
+  }, 6000);
+  const clearTimer = () => clearTimeout(stopTimer);
   speechRecognition.onend = () => {
+    clearTimer();
     isListening = false;
     micBtn.classList.remove("listening");
   };
@@ -1413,6 +1427,12 @@ addListener(querySuggestions, "click", (event) => {
 });
 
 addListener(micBtn, "click", startVoiceSearch);
+
+const SpeechRecognitionSupport = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SpeechRecognitionSupport && micBtn) {
+  micBtn.hidden = true;
+  if (voiceLang) voiceLang.disabled = true;
+}
 
 if (themeCheckboxes.length) {
   const saved = getSelectedThemes();
