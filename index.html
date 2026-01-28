@@ -24,8 +24,21 @@
       <section class="card search">
         <div class="field">
           <label for="query">Referencia</label>
-          <input id="query" type="text" placeholder="Juan 3:16" />
+          <div class="query-row">
+            <input id="query" type="text" placeholder="Juan 3:16" />
+            <button id="micBtn" class="mic-btn" type="button" aria-label="Buscar por voz">🎤</button>
+          </div>
           <div id="querySuggestions" class="suggestions" hidden></div>
+        </div>
+        <div class="field">
+          <label for="voiceLang">Idioma de voz</label>
+          <select id="voiceLang">
+            <option value="es-ES">Español</option>
+            <option value="pt-BR">Português</option>
+            <option value="fr-FR">Français</option>
+            <option value="en-US">English (US)</option>
+            <option value="en-GB">English (UK)</option>
+          </select>
         </div>
         <div class="field">
           <label for="version">Version</label>
@@ -181,7 +194,7 @@
       data-website-id="76cecf2a-92bb-43d2-ae8f-053da8117110"
       data-host-url="https://umami-production-b559.up.railway.app"
     ></script>
-    <script src="app.js?v=42"></script>
+    <script src="app.js?v=43"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;

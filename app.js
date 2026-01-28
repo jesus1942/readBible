@@ -55,6 +55,8 @@ const resultEl = document.getElementById("result");
 const verseEl = document.getElementById("verseText");
 const refEl = document.getElementById("reference");
 const querySuggestions = document.getElementById("querySuggestions");
+const micBtn = document.getElementById("micBtn");
+const voiceLang = document.getElementById("voiceLang");
 const studyDot = document.getElementById("studyDot");
 const studyActions = document.getElementById("studyActions");
 const studyActionNote = document.getElementById("studyActionNote");
@@ -123,6 +125,8 @@ let textSuggestTimer = null;
 let lastTextSuggestQuery = "";
 let textSuggestResults = [];
 let userSeed = null;
+let speechRecognition = null;
+let isListening = false;
 
 function initVersions() {
   versions.forEach((v) => {
@@ -202,6 +206,51 @@ function setSelectedThemes(themes) {
     localStorage.setItem("dailyThemes", JSON.stringify(themes));
   } catch {
     // ignore
+  }
+}
+
+function initSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return null;
+  const recog = new SpeechRecognition();
+  recog.interimResults = false;
+  recog.maxAlternatives = 1;
+  recog.continuous = false;
+  return recog;
+}
+
+function startVoiceSearch() {
+  if (!micBtn) return;
+  if (!speechRecognition) {
+    speechRecognition = initSpeechRecognition();
+  }
+  if (!speechRecognition) {
+    showStatus("La busqueda por voz no esta disponible en este navegador.", true);
+    return;
+  }
+  if (isListening) return;
+  isListening = true;
+  micBtn.classList.add("listening");
+
+  speechRecognition.lang = (voiceLang && voiceLang.value) ? voiceLang.value : "es-ES";
+  speechRecognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript || "";
+    queryInput.value = transcript.trim();
+    updateSuggestions();
+    fetchVerse();
+  };
+  speechRecognition.onerror = () => {
+    showStatus("No se pudo escuchar el audio.", true);
+  };
+  speechRecognition.onend = () => {
+    isListening = false;
+    micBtn.classList.remove("listening");
+  };
+  try {
+    speechRecognition.start();
+  } catch {
+    isListening = false;
+    micBtn.classList.remove("listening");
   }
 }
 
@@ -1362,6 +1411,8 @@ addListener(querySuggestions, "click", (event) => {
   queryInput.focus();
   querySuggestions.hidden = true;
 });
+
+addListener(micBtn, "click", startVoiceSearch);
 
 if (themeCheckboxes.length) {
   const saved = getSelectedThemes();
