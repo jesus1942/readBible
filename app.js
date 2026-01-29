@@ -1400,9 +1400,7 @@ function buildFetchUrls(url) {
     `${location.origin}/proxy?url=${encoded}`,
     `https://api.allorigins.win/raw?url=${encoded}`,
     `https://corsproxy.io/?${encoded}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
-    `https://corsproxy.org/?${encoded}`,
-    `https://proxy.cors.sh/${url}`
+    `https://api.codetabs.com/v1/proxy?quest=${encoded}`
   ];
   if (location.hostname.endsWith("github.io")) {
     return urls.slice(1);
