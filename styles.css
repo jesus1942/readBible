@@ -92,40 +92,6 @@ h1 {
   margin-bottom: 12px;
 }
 
-.query-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.query-row input {
-  flex: 1;
-}
-
-.mic-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  border: 1px solid #e2caa0;
-  background: #fff3df;
-  color: #3b2c19;
-  font-size: 18px;
-  cursor: pointer;
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.12);
-  display: grid;
-  place-items: center;
-}
-
-.mic-btn.listening {
-  background: #1c1a16;
-  color: #fff1cf;
-  box-shadow: 0 8px 16px rgba(28, 26, 22, 0.3);
-}
-
-.mic-btn svg {
-  width: 20px;
-  height: 20px;
-}
 
 label {
   font-size: 14px;
