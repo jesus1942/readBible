@@ -124,6 +124,7 @@ let splashAnimationStarted = false;
 let textSuggestTimer = null;
 let lastTextSuggestQuery = "";
 let textSuggestResults = [];
+let textSuggestController = null;
 let userSeed = null;
 let speechRecognition = null;
 let isListening = false;
@@ -460,8 +461,9 @@ function updateSuggestions() {
 
 function isTextSearchInput(raw) {
   const trimmed = raw.trim();
-  if (trimmed.length < 24) return false;
+  if (trimmed.length < 30) return false;
   if (/\d+\s*:\s*\d+/.test(trimmed)) return false;
+  if (trimmed.split(/\s+/).length < 4) return false;
   return true;
 }
 
@@ -483,6 +485,14 @@ async function fetchTextSuggestions(query) {
   if (!search) return [];
   const url = `https://www.biblegateway.com/quicksearch/?quicksearch=${encodeURIComponent(search)}&version=${DAILY_VERSION}&searchtype=all`;
   const fetchUrls = buildFetchUrls(url);
+  if (textSuggestController) {
+    try {
+      textSuggestController.abort();
+    } catch {
+      // ignore
+    }
+  }
+  textSuggestController = new AbortController();
   const html = await fetchFirstHtml(fetchUrls, 7000);
   if (!html) return [];
   return parseQuickSearchRefs(html);
@@ -502,7 +512,7 @@ function requestTextSuggestions(raw) {
     } catch {
       // ignore
     }
-  }, 350);
+  }, 700);
 }
 
 function extractByClassPattern(container, verseStart, verseEnd) {
@@ -584,6 +594,8 @@ async function fetchVerse() {
     showStatus("Formato invalido. Usa Libro Capitulo:Verso", true);
     return;
   }
+  textSuggestResults = [];
+  if (querySuggestions) querySuggestions.hidden = true;
 
   const version = versionSelect.value;
   currentStudyParsed = parsed;
@@ -635,6 +647,8 @@ async function fetchChapter() {
     showStatus("Formato invalido. Usa Libro Capitulo:Verso", true);
     return;
   }
+  textSuggestResults = [];
+  if (querySuggestions) querySuggestions.hidden = true;
 
   const version = versionSelect.value;
   currentStudyParsed = parsed;
