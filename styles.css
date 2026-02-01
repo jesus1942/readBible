@@ -491,6 +491,8 @@ button {
   display: grid;
   gap: 16px;
   align-content: start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   transform: translateX(12px);
   transition: transform 240ms ease;
 }
