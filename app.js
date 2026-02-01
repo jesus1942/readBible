@@ -1513,7 +1513,13 @@ async function fetchWithTimeout(url, timeoutMs, controller) {
       console.log("[proxy ok]", Math.round(performance.now() - start), "ms", url);
     }
     return text;
-  } catch {
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      if (isProxyDebugEnabled()) {
+        console.log("[proxy abort]", Math.round(performance.now() - start), "ms", url);
+      }
+      throw error;
+    }
     recordProxyTiming(url, performance.now() - start, false);
     if (isProxyDebugEnabled()) {
       console.log("[proxy fail]", Math.round(performance.now() - start), "ms", url);
@@ -1525,11 +1531,16 @@ async function fetchWithTimeout(url, timeoutMs, controller) {
 }
 
 async function fetchFirstHtml(urls, timeoutMs) {
-  const controllers = urls.map(() => new AbortController());
+  const ordered = orderProxies(urls);
+  const controllers = ordered.map(() => new AbortController());
   try {
-    const attempts = urls.map((url, index) =>
-      fetchWithTimeout(url, timeoutMs, controllers[index])
-    );
+    const staggerMs = 250;
+    const attempts = ordered.map((url, index) => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        fetchWithTimeout(url, timeoutMs, controllers[index]).then(resolve, reject);
+      }, index * staggerMs);
+      controllers[index].signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
+    }));
     const html = await anyResolve(attempts);
     controllers.forEach((ctrl) => ctrl.abort());
     return html;
