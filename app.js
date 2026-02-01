@@ -1072,6 +1072,7 @@ function attachPickerScroll(el, onChange) {
     if (!item) return;
     const idx = Number(item.dataset.index || "0");
     el.scrollTo({ top: idx * PICKER_ITEM_HEIGHT, behavior: "smooth" });
+    vibrateTap();
   });
 }
 
@@ -1135,7 +1136,17 @@ function applyPickerSelection() {
   const verse = pickerState.verse;
   queryInput.value = buildReferenceInput(book, chapter, verse, verse);
   closePicker();
+  vibrateTap();
   fetchVerse();
+}
+
+function vibrateTap() {
+  try {
+    if (!navigator.vibrate) return;
+    navigator.vibrate(12);
+  } catch {
+    // ignore
+  }
 }
 
 function renderNotesIndex() {
