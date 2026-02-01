@@ -1,9 +1,9 @@
-const CACHE_NAME = "bibleapp-pwa-v64";
+const CACHE_NAME = "bibleapp-pwa-v65";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
-  "./app.js?v=51",
+  "./app.js?v=52",
   "./daily_verses.json",
   "./efemerides.json",
   "./manifest.json",
@@ -32,7 +32,11 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.origin !== self.location.origin) return;
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    caches.match(event.request).then((cached) =>
+      cached || fetch(event.request).catch(() => cached)
+    )
   );
 });

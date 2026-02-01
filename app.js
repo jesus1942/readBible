@@ -206,6 +206,26 @@ function setSelectedThemes(themes) {
   }
 }
 
+function readDailyVerseCache() {
+  try {
+    const raw = localStorage.getItem("dailyVerseCache");
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeDailyVerseCache(payload) {
+  try {
+    localStorage.setItem("dailyVerseCache", JSON.stringify(payload));
+  } catch {
+    // ignore
+  }
+}
+
 
 function simpleHash(str) {
   let hash = 0;
@@ -1398,6 +1418,9 @@ function buildFetchUrls(url) {
   const encoded = encodeURIComponent(url);
   const urls = [
     `${location.origin}/proxy?url=${encoded}`,
+    `https://corsproxy.io/?url=${encoded}`,
+    `https://corsproxy.org/?${encoded}`,
+    `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
     `https://api.allorigins.win/raw?url=${encoded}`
   ];
   if (location.hostname.endsWith("github.io")) {
@@ -1898,36 +1921,48 @@ function closeSplash(timer) {
 }
 
 async function showDailyVerse() {
+  let reference = "";
+  let verseText = "";
   try {
     const verses = await fetchJson("daily_verses.json");
+    if (!Array.isArray(verses) || !verses.length) {
+      throw new Error("daily verses empty");
+    }
     const dayIndex = dayOfYearIndex();
     const idx = dailyIndexForUser(dayIndex, verses.length);
     const verse = verses[idx];
-    const reference = sanitizeReferenceString(verse.reference || "");
-    let verseText = verse.text || "";
+    reference = sanitizeReferenceString(verse.reference || "");
+    verseText = verse.text || "";
     if (!verseText && reference) {
       verseText = await fetchVerseByReference(reference, DAILY_VERSION);
     }
-    const name = getUserName();
-    if (name) {
-      dailyGreeting.textContent = `Hola ${name}`;
-      dailyGreeting.hidden = false;
-    } else {
-      dailyGreeting.hidden = true;
+    if (verseText || reference) {
+      writeDailyVerseCache({ text: verseText, reference, version: DAILY_VERSION });
     }
-    dailyText.textContent = verseText || "No se pudo cargar el versiculo.";
-    if (reference) {
-      dailyRef.textContent = `— ${reference} (${DAILY_VERSION})`;
-    } else {
-      dailyRef.textContent = "";
-    }
-    dailyVerse.hidden = false;
-    dailyClose.addEventListener("click", closeDailyVerse, { once: true });
-    dailyVerse.addEventListener("click", closeDailyVerse, { once: true });
-    dailyVerse.addEventListener("touchstart", closeDailyVerse, { once: true });
   } catch {
-    // ignore daily verse errors
+    const cached = readDailyVerseCache();
+    if (cached) {
+      verseText = cached.text || "";
+      reference = cached.reference || "";
+    }
   }
+  const name = getUserName();
+  if (name) {
+    dailyGreeting.textContent = `Hola ${name}`;
+    dailyGreeting.hidden = false;
+  } else {
+    dailyGreeting.hidden = true;
+  }
+  dailyText.textContent = verseText || "No se pudo cargar el versiculo.";
+  if (reference) {
+    dailyRef.textContent = `— ${reference} (${DAILY_VERSION})`;
+  } else {
+    dailyRef.textContent = "";
+  }
+  dailyVerse.hidden = false;
+  dailyClose.addEventListener("click", closeDailyVerse, { once: true });
+  dailyVerse.addEventListener("click", closeDailyVerse, { once: true });
+  dailyVerse.addEventListener("touchstart", closeDailyVerse, { once: true });
 }
 
 function closeDailyVerse() {
