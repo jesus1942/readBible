@@ -238,6 +238,14 @@ function recordProxyTiming(url, ms, ok) {
   writeProxyStats(stats);
 }
 
+function isProxyDebugEnabled() {
+  try {
+    return localStorage.getItem("debugProxy") === "1";
+  } catch {
+    return false;
+  }
+}
+
 function orderProxies(urls) {
   const stats = readProxyStats();
   return [...urls].sort((a, b) => {
@@ -1501,9 +1509,15 @@ async function fetchWithTimeout(url, timeoutMs, controller) {
     const text = await response.text();
     if (!text || text.length <= 500) throw new Error("short response");
     recordProxyTiming(url, performance.now() - start, true);
+    if (isProxyDebugEnabled()) {
+      console.log("[proxy ok]", Math.round(performance.now() - start), "ms", url);
+    }
     return text;
   } catch {
     recordProxyTiming(url, performance.now() - start, false);
+    if (isProxyDebugEnabled()) {
+      console.log("[proxy fail]", Math.round(performance.now() - start), "ms", url);
+    }
     throw new Error("fetch failed");
   } finally {
     clearTimeout(timer);
