@@ -84,6 +84,13 @@ const themesSave = document.getElementById("themesSave");
 const installButton = document.getElementById("installButton");
 const notesList = document.getElementById("notesList");
 const notesEmpty = document.getElementById("notesEmpty");
+const pickerBtn = document.getElementById("pickerBtn");
+const pickerOverlay = document.getElementById("pickerOverlay");
+const pickerClose = document.getElementById("pickerClose");
+const pickerApply = document.getElementById("pickerApply");
+const pickerBook = document.getElementById("pickerBook");
+const pickerChapter = document.getElementById("pickerChapter");
+const pickerVerse = document.getElementById("pickerVerse");
 
 const zenOverlay = document.getElementById("zenOverlay");
 const zenText = document.getElementById("zenText");
@@ -128,6 +135,81 @@ let textSuggestResults = [];
 let textSuggestController = null;
 let userSeed = null;
 let deferredInstallPrompt = null;
+let pickerState = {
+  bookIndex: 0,
+  chapter: 1,
+  verse: 1
+};
+
+const PICKER_ITEM_HEIGHT = 36;
+const BOOK_CHAPTERS = {
+  "Génesis": 50,
+  "Éxodo": 40,
+  "Levítico": 27,
+  "Números": 36,
+  "Deuteronomio": 34,
+  "Josué": 24,
+  "Jueces": 21,
+  "Rut": 4,
+  "1 Samuel": 31,
+  "2 Samuel": 24,
+  "1 Reyes": 22,
+  "2 Reyes": 25,
+  "1 Crónicas": 29,
+  "2 Crónicas": 36,
+  "Esdras": 10,
+  "Nehemías": 13,
+  "Ester": 10,
+  "Job": 42,
+  "Salmos": 150,
+  "Proverbios": 31,
+  "Eclesiastés": 12,
+  "Cantares": 8,
+  "Isaías": 66,
+  "Jeremías": 52,
+  "Lamentaciones": 5,
+  "Ezequiel": 48,
+  "Daniel": 12,
+  "Oseas": 14,
+  "Joel": 3,
+  "Amós": 9,
+  "Abdías": 1,
+  "Jonás": 4,
+  "Miqueas": 7,
+  "Nahúm": 3,
+  "Habacuc": 3,
+  "Sofonías": 3,
+  "Hageo": 2,
+  "Zacarías": 14,
+  "Malaquías": 4,
+  "Mateo": 28,
+  "Marcos": 16,
+  "Lucas": 24,
+  "Juan": 21,
+  "Hechos": 28,
+  "Romanos": 16,
+  "1 Corintios": 16,
+  "2 Corintios": 13,
+  "Gálatas": 6,
+  "Efesios": 6,
+  "Filipenses": 4,
+  "Colosenses": 4,
+  "1 Tesalonicenses": 5,
+  "2 Tesalonicenses": 3,
+  "1 Timoteo": 6,
+  "2 Timoteo": 4,
+  "Tito": 3,
+  "Filemón": 1,
+  "Hebreos": 13,
+  "Santiago": 5,
+  "1 Pedro": 5,
+  "2 Pedro": 3,
+  "1 Juan": 5,
+  "2 Juan": 1,
+  "3 Juan": 1,
+  "Judas": 1,
+  "Apocalipsis": 22
+};
 
 function initVersions() {
   versions.forEach((v) => {
@@ -874,6 +956,188 @@ function buildReferenceInput(book, chapter, verseStart, verseEnd) {
   return `${bookDisplay} ${chapter}:${versePart}`;
 }
 
+function readVerseCountCache(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.count !== "number") return null;
+    return parsed.count;
+  } catch {
+    return null;
+  }
+}
+
+function writeVerseCountCache(key, count) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ count, ts: Date.now() }));
+  } catch {
+    // ignore
+  }
+}
+
+function parseVerseCount(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const passage = doc.querySelector("div.passage-text");
+  if (!passage) return null;
+  const spans = passage.querySelectorAll("span.text");
+  let maxVerse = 0;
+  spans.forEach((span) => {
+    span.classList.forEach((cls) => {
+      const rangeMatch = cls.match(/-(\d+)-(\d+)$/);
+      if (rangeMatch) {
+        const start = parseInt(rangeMatch[1], 10);
+        const end = parseInt(rangeMatch[2], 10);
+        if (end > maxVerse) maxVerse = end;
+        if (start > maxVerse) maxVerse = start;
+        return;
+      }
+      const singleMatch = cls.match(/-(\d+)$/);
+      if (singleMatch) {
+        const num = parseInt(singleMatch[1], 10);
+        if (num > maxVerse) maxVerse = num;
+      }
+    });
+  });
+  return maxVerse || null;
+}
+
+async function fetchVerseCount(book, chapter, version) {
+  const cacheKey = `verseCount:${book}:${chapter}:${version}`;
+  const cached = readVerseCountCache(cacheKey);
+  if (cached) return cached;
+  const bookQuery = formatBookDisplay(book);
+  const search = `${bookQuery} ${chapter}`;
+  const url = `https://www.biblegateway.com/passage/?search=${encodeURIComponent(search)}&version=${version}`;
+  const html = await fetchFirstHtml(buildFetchUrls(url), 7000);
+  if (!html) return null;
+  const count = parseVerseCount(html);
+  if (count) writeVerseCountCache(cacheKey, count);
+  return count;
+}
+
+function buildPickerItems(count, start = 1) {
+  const items = [];
+  for (let i = start; i <= count; i += 1) {
+    items.push(String(i));
+  }
+  return items;
+}
+
+function renderPickerColumn(el, items, selectedIndex) {
+  if (!el) return;
+  el.innerHTML = "";
+  items.forEach((item, index) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "picker-item";
+    btn.textContent = item;
+    btn.dataset.index = String(index);
+    el.appendChild(btn);
+  });
+  requestAnimationFrame(() => {
+    el.scrollTop = Math.max(0, selectedIndex * PICKER_ITEM_HEIGHT);
+    updatePickerActive(el, selectedIndex);
+  });
+}
+
+function updatePickerActive(el, selectedIndex) {
+  if (!el) return;
+  const nodes = el.querySelectorAll(".picker-item");
+  nodes.forEach((node, index) => {
+    node.classList.toggle("active", index === selectedIndex);
+  });
+}
+
+function getPickerIndex(el) {
+  if (!el) return 0;
+  return Math.max(0, Math.round(el.scrollTop / PICKER_ITEM_HEIGHT));
+}
+
+function attachPickerScroll(el, onChange) {
+  if (!el) return;
+  let raf = 0;
+  el.addEventListener("scroll", () => {
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      const idx = getPickerIndex(el);
+      updatePickerActive(el, idx);
+      onChange(idx);
+    });
+  });
+  el.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const item = target.closest(".picker-item");
+    if (!item) return;
+    const idx = Number(item.dataset.index || "0");
+    el.scrollTo({ top: idx * PICKER_ITEM_HEIGHT, behavior: "smooth" });
+  });
+}
+
+async function updatePickerVerses() {
+  const book = BOOKS[pickerState.bookIndex];
+  const chapterCount = BOOK_CHAPTERS[book] || 1;
+  const chapter = Math.min(Math.max(1, pickerState.chapter), chapterCount);
+  pickerState.chapter = chapter;
+  const version = versionSelect.value || DAILY_VERSION;
+  let verseCount = await fetchVerseCount(book, chapter, version);
+  if (!verseCount) verseCount = 176;
+  const verseItems = buildPickerItems(verseCount);
+  const verseIndex = Math.max(0, Math.min(verseItems.length - 1, pickerState.verse - 1));
+  pickerState.verse = verseIndex + 1;
+  renderPickerColumn(pickerVerse, verseItems, verseIndex);
+}
+
+function updatePickerChapters() {
+  const book = BOOKS[pickerState.bookIndex];
+  const count = BOOK_CHAPTERS[book] || 1;
+  const chapterItems = buildPickerItems(count);
+  const chapterIndex = Math.max(0, Math.min(count - 1, pickerState.chapter - 1));
+  pickerState.chapter = chapterIndex + 1;
+  renderPickerColumn(pickerChapter, chapterItems, chapterIndex);
+}
+
+function updatePickerBooks() {
+  const bookItems = BOOKS;
+  const bookIndex = Math.max(0, Math.min(bookItems.length - 1, pickerState.bookIndex));
+  pickerState.bookIndex = bookIndex;
+  renderPickerColumn(pickerBook, bookItems, bookIndex);
+}
+
+async function initPickerStateFromInput() {
+  const parsed = parseReference(queryInput.value);
+  if (parsed && BOOKS.includes(parsed.book)) {
+    pickerState.bookIndex = BOOKS.indexOf(parsed.book);
+    pickerState.chapter = parsed.chapter;
+    pickerState.verse = parsed.verseStart;
+  }
+  updatePickerBooks();
+  updatePickerChapters();
+  await updatePickerVerses();
+}
+
+function openPicker() {
+  if (!pickerOverlay) return;
+  if (querySuggestions) querySuggestions.hidden = true;
+  initPickerStateFromInput();
+  pickerOverlay.hidden = false;
+}
+
+function closePicker() {
+  if (!pickerOverlay) return;
+  pickerOverlay.hidden = true;
+}
+
+function applyPickerSelection() {
+  const book = BOOKS[pickerState.bookIndex];
+  const chapter = pickerState.chapter;
+  const verse = pickerState.verse;
+  queryInput.value = buildReferenceInput(book, chapter, verse, verse);
+  closePicker();
+  fetchVerse();
+}
+
 function renderNotesIndex() {
   if (!notesList || !notesEmpty) return;
   const entries = [];
@@ -1534,6 +1798,28 @@ window.addEventListener("appinstalled", () => {
   trackEvent("app_installed");
   deferredInstallPrompt = null;
   if (installButton) installButton.hidden = true;
+});
+addListener(pickerBtn, "click", openPicker);
+addListener(pickerClose, "click", closePicker);
+addListener(pickerOverlay, "click", (event) => {
+  if (event.target === pickerOverlay) closePicker();
+});
+addListener(pickerApply, "click", applyPickerSelection);
+
+attachPickerScroll(pickerBook, async (index) => {
+  pickerState.bookIndex = index;
+  pickerState.chapter = 1;
+  pickerState.verse = 1;
+  updatePickerChapters();
+  await updatePickerVerses();
+});
+attachPickerScroll(pickerChapter, async (index) => {
+  pickerState.chapter = index + 1;
+  pickerState.verse = 1;
+  await updatePickerVerses();
+});
+attachPickerScroll(pickerVerse, (index) => {
+  pickerState.verse = index + 1;
 });
 
 addListener(queryInput, "input", () => {

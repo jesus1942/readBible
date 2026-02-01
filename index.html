@@ -25,6 +25,7 @@
         <div class="field">
           <label for="query">Referencia</label>
           <input id="query" type="text" placeholder="Juan 3:16" />
+          <button id="pickerBtn" class="ghost picker-btn" type="button">Elegir con rueda</button>
           <div id="querySuggestions" class="suggestions" hidden></div>
         </div>
         <div class="field">
@@ -178,6 +179,27 @@
       </div>
     </div>
 
+    <div id="pickerOverlay" class="picker-overlay" hidden>
+      <div class="picker-panel" role="dialog" aria-label="Seleccionar referencia">
+        <div class="picker-header">
+          <p class="eyebrow">Seleccionar</p>
+          <button id="pickerClose" class="menu-close" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="picker-labels">
+          <span>Libro</span>
+          <span>Capitulo</span>
+          <span>Versiculo</span>
+        </div>
+        <div class="picker-body">
+          <div id="pickerBook" class="picker-column" aria-label="Libro"></div>
+          <div id="pickerChapter" class="picker-column" aria-label="Capitulo"></div>
+          <div id="pickerVerse" class="picker-column" aria-label="Versiculo"></div>
+          <div class="picker-highlight" aria-hidden="true"></div>
+        </div>
+        <button id="pickerApply" class="picker-apply" type="button">Usar referencia</button>
+      </div>
+    </div>
+
     <button id="highlightBtn" class="highlight-btn" type="button" hidden>Resaltar</button>
 
     <script
@@ -186,7 +208,7 @@
       data-website-id="76cecf2a-92bb-43d2-ae8f-053da8117110"
       data-host-url="https://umami-production-b559.up.railway.app"
     ></script>
-    <script src="app.js?v=57"></script>
+    <script src="app.js?v=58"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;
