@@ -791,11 +791,16 @@ button {
   font-weight: 600;
   color: #4a3824;
   border-radius: 12px;
+  opacity: 0.5;
+  filter: blur(0.7px);
+  transition: opacity 140ms ease, filter 140ms ease;
 }
 
 .picker-item.active {
   background: rgba(243, 156, 18, 0.1);
   color: #2b1a0e;
+  opacity: 1;
+  filter: none;
 }
 
 .picker-highlight {
