@@ -1057,6 +1057,8 @@ function getPickerIndex(el) {
 function attachPickerScroll(el, onChange) {
   if (!el) return;
   let raf = 0;
+  let scrollEndTimer = 0;
+  let lastSnapIndex = 0;
   el.addEventListener("scroll", () => {
     if (raf) cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => {
@@ -1064,6 +1066,14 @@ function attachPickerScroll(el, onChange) {
       updatePickerActive(el, idx);
       onChange(idx);
     });
+    if (scrollEndTimer) clearTimeout(scrollEndTimer);
+    scrollEndTimer = setTimeout(() => {
+      const idx = getPickerIndex(el);
+      if (idx !== lastSnapIndex) {
+        lastSnapIndex = idx;
+        vibrateSnap();
+      }
+    }, 140);
   });
   el.addEventListener("click", (event) => {
     const target = event.target;
@@ -1144,6 +1154,15 @@ function vibrateTap() {
   try {
     if (!navigator.vibrate) return;
     navigator.vibrate(12);
+  } catch {
+    // ignore
+  }
+}
+
+function vibrateSnap() {
+  try {
+    if (!navigator.vibrate) return;
+    navigator.vibrate(8);
   } catch {
     // ignore
   }
