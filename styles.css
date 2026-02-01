@@ -639,8 +639,11 @@ button {
   justify-content: center;
 }
 
-.footer-actions a {
+.footer-actions a,
+.footer-actions button {
   text-decoration: none;
+  border: none;
+  cursor: pointer;
 }
 
 .whatsapp-button {
@@ -663,6 +666,17 @@ button {
   font-size: 13px;
   letter-spacing: 0.02em;
   box-shadow: 0 6px 12px rgba(0, 158, 227, 0.3);
+}
+
+.install-button {
+  background: #f39c12;
+  color: #2b1a0e;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  box-shadow: 0 6px 12px rgba(243, 156, 18, 0.3);
 }
 
 .name-prompt {

@@ -81,6 +81,7 @@ const analytics = typeof window !== "undefined" ? window.umami : null;
 const highlightBtn = document.getElementById("highlightBtn");
 const themeCheckboxes = Array.from(document.querySelectorAll(".theme-chip input"));
 const themesSave = document.getElementById("themesSave");
+const installButton = document.getElementById("installButton");
 
 const zenOverlay = document.getElementById("zenOverlay");
 const zenText = document.getElementById("zenText");
@@ -124,6 +125,7 @@ let lastTextSuggestQuery = "";
 let textSuggestResults = [];
 let textSuggestController = null;
 let userSeed = null;
+let deferredInstallPrompt = null;
 
 function initVersions() {
   versions.forEach((v) => {
@@ -1425,8 +1427,26 @@ addListener(helpClose, "click", closeHelp);
 addListener(helpOverlay, "click", (event) => {
   if (event.target === helpOverlay) closeHelp();
 });
+addListener(installButton, "click", async () => {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  try {
+    await deferredInstallPrompt.userChoice;
+  } catch {
+    // ignore
+  }
+  deferredInstallPrompt = null;
+  if (installButton) installButton.hidden = true;
+});
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  if (installButton) installButton.hidden = false;
+});
 window.addEventListener("appinstalled", () => {
   trackEvent("app_installed");
+  deferredInstallPrompt = null;
+  if (installButton) installButton.hidden = true;
 });
 
 addListener(queryInput, "input", () => {
