@@ -728,7 +728,9 @@ button {
 
 .picker-panel {
   width: min(680px, 100%);
-  background: #f7efe1;
+  background: rgba(247, 239, 225, 0.7);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
   border-radius: 24px 24px 18px 18px;
   padding: 16px 16px 18px;
   box-shadow: 0 20px 40px rgba(15, 10, 7, 0.35);
@@ -767,10 +769,11 @@ button {
   height: 100%;
   overflow-y: auto;
   scroll-snap-type: y proximity;
-  padding: 72px 4px;
+  padding: 102px 4px;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .picker-column::-webkit-scrollbar {
@@ -782,6 +785,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
   scroll-snap-align: center;
   font-size: 14px;
   font-weight: 600;
@@ -790,7 +794,7 @@ button {
 }
 
 .picker-item.active {
-  background: rgba(243, 156, 18, 0.08);
+  background: rgba(243, 156, 18, 0.1);
   color: #2b1a0e;
 }
 
@@ -801,8 +805,11 @@ button {
   top: 50%;
   height: 36px;
   transform: translateY(-50%);
-  border-top: 1px solid rgba(59, 44, 25, 0.14);
-  border-bottom: 1px solid rgba(59, 44, 25, 0.14);
+  border-top: 1px solid rgba(255, 255, 255, 0.35);
+  border-bottom: 1px solid rgba(59, 44, 25, 0.12);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   pointer-events: none;
 }
 
