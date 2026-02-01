@@ -799,7 +799,7 @@ button {
   background: rgba(243, 156, 18, 0.1);
   color: #2b1a0e;
   opacity: 1;
-  transform: scale(1.02);
+  transform: scale(1.05);
 }
 
 .picker-highlight {
