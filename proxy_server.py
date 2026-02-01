@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import http.server
+import os
 import socketserver
 import urllib.parse
 import urllib.request
@@ -48,8 +49,8 @@ class ProxyHandler(http.server.BaseHTTPRequestHandler):
 
 
 def main():
-    port = 8787
-    with socketserver.TCPServer(("", port), ProxyHandler) as httpd:
+    port = int(os.environ.get("PORT", "8787"))
+    with socketserver.ThreadingTCPServer(("", port), ProxyHandler) as httpd:
         print(f"Proxy CORS en http://0.0.0.0:{port}/?url=")
         httpd.serve_forever()
 

@@ -206,6 +206,52 @@ function setSelectedThemes(themes) {
   }
 }
 
+function readProxyStats() {
+  try {
+    const raw = localStorage.getItem("proxyStats");
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeProxyStats(stats) {
+  try {
+    localStorage.setItem("proxyStats", JSON.stringify(stats));
+  } catch {
+    // ignore
+  }
+}
+
+function recordProxyTiming(url, ms, ok) {
+  const stats = readProxyStats();
+  const entry = stats[url] || { count: 0, avgMs: 0, ok: 0, fail: 0 };
+  entry.count += 1;
+  if (ok) entry.ok += 1;
+  else entry.fail += 1;
+  if (Number.isFinite(ms)) {
+    entry.avgMs = entry.count === 1 ? ms : (entry.avgMs * 0.7 + ms * 0.3);
+  }
+  stats[url] = entry;
+  writeProxyStats(stats);
+}
+
+function orderProxies(urls) {
+  const stats = readProxyStats();
+  return [...urls].sort((a, b) => {
+    const sa = stats[a];
+    const sb = stats[b];
+    if (!sa && !sb) return 0;
+    if (!sa) return 1;
+    if (!sb) return -1;
+    if (sa.ok !== sb.ok) return sb.ok - sa.ok;
+    if (sa.avgMs !== sb.avgMs) return sa.avgMs - sb.avgMs;
+    return sa.fail - sb.fail;
+  });
+}
+
 function readDailyVerseCache() {
   try {
     const raw = localStorage.getItem("dailyVerseCache");
@@ -1418,15 +1464,16 @@ function buildFetchUrls(url) {
   const encoded = encodeURIComponent(url);
   const urls = [
     `${location.origin}/proxy?url=${encoded}`,
+    `https://readbible-production.up.railway.app/?url=${encoded}`,
     `https://corsproxy.io/?url=${encoded}`,
     `https://corsproxy.org/?${encoded}`,
     `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
     `https://api.allorigins.win/raw?url=${encoded}`
   ];
   if (location.hostname.endsWith("github.io")) {
-    return urls.slice(1);
+    return orderProxies(urls.slice(1));
   }
-  return urls;
+  return orderProxies(urls);
 }
 
 function anyResolve(promises) {
@@ -1447,12 +1494,17 @@ function anyResolve(promises) {
 
 async function fetchWithTimeout(url, timeoutMs, controller) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const start = performance.now();
   try {
     const response = await fetch(url, { signal: controller.signal });
     if (!response.ok) throw new Error("bad response");
     const text = await response.text();
     if (!text || text.length <= 500) throw new Error("short response");
+    recordProxyTiming(url, performance.now() - start, true);
     return text;
+  } catch {
+    recordProxyTiming(url, performance.now() - start, false);
+    throw new Error("fetch failed");
   } finally {
     clearTimeout(timer);
   }
