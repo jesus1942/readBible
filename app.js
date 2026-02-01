@@ -82,6 +82,8 @@ const highlightBtn = document.getElementById("highlightBtn");
 const themeCheckboxes = Array.from(document.querySelectorAll(".theme-chip input"));
 const themesSave = document.getElementById("themesSave");
 const installButton = document.getElementById("installButton");
+const notesList = document.getElementById("notesList");
+const notesEmpty = document.getElementById("notesEmpty");
 
 const zenOverlay = document.getElementById("zenOverlay");
 const zenText = document.getElementById("zenText");
@@ -850,6 +852,78 @@ function hasStudyData(data) {
   return false;
 }
 
+function parseStudyKey(key) {
+  if (!key || !key.startsWith("study:verse:")) return null;
+  const parts = key.split(":");
+  if (parts.length < 6) return null;
+  const book = parts[2];
+  const chapter = Number(parts[3]);
+  if (!Number.isFinite(chapter)) return null;
+  const verseRange = parts[4];
+  const version = parts.slice(5).join(":");
+  const [startRaw, endRaw] = verseRange.split("-");
+  const verseStart = Number(startRaw);
+  const verseEnd = Number(endRaw || startRaw);
+  if (!Number.isFinite(verseStart) || !Number.isFinite(verseEnd)) return null;
+  return { book, chapter, verseStart, verseEnd, version };
+}
+
+function buildReferenceInput(book, chapter, verseStart, verseEnd) {
+  const bookDisplay = formatBookDisplay(book);
+  const versePart = verseStart === verseEnd ? `${verseStart}` : `${verseStart}-${verseEnd}`;
+  return `${bookDisplay} ${chapter}:${versePart}`;
+}
+
+function renderNotesIndex() {
+  if (!notesList || !notesEmpty) return;
+  const entries = [];
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith("study:")) continue;
+      const data = readStudy(key);
+      if (!hasStudyData(data)) continue;
+      const parsed = parseStudyKey(key);
+      if (!parsed) continue;
+      entries.push({
+        key,
+        parsed,
+        updatedAt: data.updatedAt || 0,
+        notesCount: Array.isArray(data.notes) ? data.notes.filter((n) => n && n.text && n.text.trim()).length : 0
+      });
+    }
+  } catch {
+    // ignore
+  }
+  entries.sort((a, b) => b.updatedAt - a.updatedAt);
+  notesList.innerHTML = "";
+  notesEmpty.hidden = entries.length > 0;
+  entries.forEach((entry) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "note-link";
+    button.dataset.studyKey = entry.key;
+    button.textContent = buildReference(entry.parsed.book, entry.parsed.chapter, entry.parsed.verseStart, entry.parsed.verseEnd, entry.parsed.version);
+    if (entry.notesCount > 0) {
+      const meta = document.createElement("small");
+      meta.textContent = entry.notesCount === 1 ? "1 nota" : `${entry.notesCount} notas`;
+      button.appendChild(meta);
+    }
+    notesList.appendChild(button);
+  });
+}
+
+function openNoteFromIndex(key) {
+  const parsed = parseStudyKey(key);
+  if (!parsed) return;
+  queryInput.value = buildReferenceInput(parsed.book, parsed.chapter, parsed.verseStart, parsed.verseEnd);
+  if (versions.includes(parsed.version)) {
+    versionSelect.value = parsed.version;
+  }
+  closeMenu();
+  fetchVerse();
+}
+
 function normalizeStudyData(data) {
   if (!data || typeof data !== "object") {
     return { notes: [], sermonDate: null };
@@ -984,6 +1058,7 @@ function saveStudyFromEditor() {
   }
   closeStudyEditorSheet();
   refreshStudyDot();
+  renderNotesIndex();
 }
 
 function newStudyNote() {
@@ -1008,6 +1083,7 @@ function deleteActiveStudyNote() {
     deleteStudy(key);
     closeStudyEditorSheet();
     refreshStudyDot();
+    renderNotesIndex();
     return;
   }
   writeStudy(key, next);
@@ -1019,6 +1095,7 @@ function deleteActiveStudyNote() {
   }
   renderNotesList(next);
   refreshStudyDot();
+  renderNotesIndex();
 }
 
 function selectStudyNote(noteId) {
@@ -1053,6 +1130,7 @@ function deleteStudyForCurrent() {
   closeStudyActions();
   closeStudyEditorSheet();
   refreshStudyDot();
+  renderNotesIndex();
 }
 
 function clearTextSelection() {
@@ -1426,6 +1504,15 @@ addListener(helpOpen, "click", () => {
 addListener(helpClose, "click", closeHelp);
 addListener(helpOverlay, "click", (event) => {
   if (event.target === helpOverlay) closeHelp();
+});
+addListener(notesList, "click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const button = target.closest(".note-link");
+  if (!button) return;
+  const key = button.dataset.studyKey;
+  if (!key) return;
+  openNoteFromIndex(key);
 });
 addListener(installButton, "click", async () => {
   if (!deferredInstallPrompt) return;
@@ -2068,6 +2155,7 @@ function closeDailyVerse() {
 
 function openMenu() {
   if (!sideMenu) return;
+  renderNotesIndex();
   sideMenu.hidden = false;
 }
 

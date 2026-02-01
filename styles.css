@@ -668,6 +668,32 @@ button {
   box-shadow: 0 6px 12px rgba(0, 158, 227, 0.3);
 }
 
+.notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.note-link {
+  text-align: left;
+  background: #f8efe2;
+  color: #3b2c19;
+  border: 1px solid rgba(59, 44, 25, 0.15);
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 4px 10px rgba(26, 18, 12, 0.08);
+}
+
+.note-link small {
+  display: block;
+  font-weight: 500;
+  color: #8a6b44;
+  margin-top: 4px;
+}
+
 .install-button {
   background: #f39c12;
   color: #2b1a0e;
