@@ -816,6 +816,39 @@ button {
   cursor: pointer;
 }
 
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #3b2c19;
+}
+
+.toggle-row input {
+  accent-color: #f39c12;
+  width: 18px;
+  height: 18px;
+}
+
+.ui-large {
+  font-size: 1.08em;
+}
+
+.ui-large .actions button,
+.ui-large .footer-actions a,
+.ui-large .footer-actions button {
+  font-size: 14px;
+}
+
+.ui-large .verse {
+  font-size: 1.15em;
+}
+
+.ui-large .picker-item {
+  font-size: 15px;
+}
+
 @media (max-width: 480px) {
   .picker-panel {
     border-radius: 20px 20px 12px 12px;

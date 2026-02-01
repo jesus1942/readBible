@@ -84,6 +84,7 @@ const themesSave = document.getElementById("themesSave");
 const installButton = document.getElementById("installButton");
 const notesList = document.getElementById("notesList");
 const notesEmpty = document.getElementById("notesEmpty");
+const bigUiToggle = document.getElementById("bigUiToggle");
 const pickerBtn = document.getElementById("pickerBtn");
 const pickerOverlay = document.getElementById("pickerOverlay");
 const pickerClose = document.getElementById("pickerClose");
@@ -140,6 +141,19 @@ let pickerState = {
   chapter: 1,
   verse: 1
 };
+
+function readBigUi() {
+  try {
+    return localStorage.getItem("bigUi") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function applyBigUi(enabled) {
+  document.body.classList.toggle("ui-large", enabled);
+  if (bigUiToggle) bigUiToggle.checked = enabled;
+}
 
 const PICKER_ITEM_HEIGHT = 36;
 const BOOK_CHAPTERS = {
@@ -218,6 +232,7 @@ function initVersions() {
     option.textContent = v;
     versionSelect.appendChild(option);
   });
+  applyBigUi(readBigUi());
 }
 
 function normalizeReferenceInput(text) {
@@ -1798,6 +1813,15 @@ addListener(helpOpen, "click", () => {
 addListener(helpClose, "click", closeHelp);
 addListener(helpOverlay, "click", (event) => {
   if (event.target === helpOverlay) closeHelp();
+});
+addListener(bigUiToggle, "change", () => {
+  const enabled = !!bigUiToggle && bigUiToggle.checked;
+  applyBigUi(enabled);
+  try {
+    localStorage.setItem("bigUi", enabled ? "1" : "0");
+  } catch {
+    // ignore
+  }
 });
 addListener(notesList, "click", (event) => {
   const target = event.target;
