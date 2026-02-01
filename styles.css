@@ -741,7 +741,7 @@ button {
 
 .picker-labels {
   display: grid;
-  grid-template-columns: 1.5fr 0.7fr 0.7fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 12px;
   font-size: 12px;
   font-weight: 700;
@@ -755,7 +755,7 @@ button {
 .picker-body {
   position: relative;
   display: grid;
-  grid-template-columns: 1.5fr 0.7fr 0.7fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 12px;
   height: 240px;
   margin-bottom: 12px;
@@ -764,9 +764,11 @@ button {
 .picker-column {
   height: 100%;
   overflow-y: auto;
-  scroll-snap-type: y mandatory;
-  padding: 84px 6px;
+  scroll-snap-type: y proximity;
+  padding: 72px 4px;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .picker-column::-webkit-scrollbar {
@@ -781,12 +783,12 @@ button {
   scroll-snap-align: center;
   font-size: 14px;
   font-weight: 600;
-  color: #3b2c19;
+  color: #4a3824;
   border-radius: 12px;
 }
 
 .picker-item.active {
-  background: rgba(243, 156, 18, 0.15);
+  background: rgba(243, 156, 18, 0.08);
   color: #2b1a0e;
 }
 
@@ -797,8 +799,8 @@ button {
   top: 50%;
   height: 36px;
   transform: translateY(-50%);
-  border-top: 1px solid rgba(59, 44, 25, 0.2);
-  border-bottom: 1px solid rgba(59, 44, 25, 0.2);
+  border-top: 1px solid rgba(59, 44, 25, 0.14);
+  border-bottom: 1px solid rgba(59, 44, 25, 0.14);
   pointer-events: none;
 }
 
@@ -822,7 +824,7 @@ button {
 
   .picker-labels,
   .picker-body {
-    grid-template-columns: 1.4fr 0.8fr 0.8fr;
+    grid-template-columns: 1fr 1fr 1fr;
   }
 }
 
