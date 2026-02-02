@@ -22,7 +22,7 @@ const BOOKS = [
 ];
 
 const TEXT_SUGGEST_LIMIT = 6;
-const PUSH_SERVER_URL = "https://readbible-push.up.railway.app";
+const PUSH_SERVER_URL = "https://versiculodiario-production.up.railway.app";
 
 const unwantedTexts = [
   "Read the Bible", "Leer la Biblia",
