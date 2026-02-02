@@ -35,6 +35,28 @@ app.use(express.json({ limit: "1mb" }));
 const dailyVersesPath = path.join(__dirname, "..", "daily_verses.json");
 const dailyVerses = JSON.parse(fs.readFileSync(dailyVersesPath, "utf-8"));
 
+async function ensureSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id BIGSERIAL PRIMARY KEY,
+      endpoint TEXT UNIQUE NOT NULL,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      user_seed TEXT NOT NULL,
+      themes JSONB NOT NULL DEFAULT '[]'::jsonb,
+      timezone TEXT NOT NULL DEFAULT 'UTC',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_sent_date TEXT,
+      last_sent_at TIMESTAMPTZ
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS push_subscriptions_timezone_idx
+    ON push_subscriptions (timezone);
+  `);
+}
+
 function normalizeThemes(themes) {
   if (!Array.isArray(themes)) return [];
   return themes.map((t) => String(t || "").trim()).filter(Boolean);
@@ -307,6 +329,13 @@ app.get("/healthz", (req, res) => {
   res.json({ ok: true });
 });
 
-app.listen(PORT, () => {
-  console.log(`Push server running on ${PORT}`);
-});
+ensureSchema()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Push server running on ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Failed to init schema", err);
+    process.exit(1);
+  });
