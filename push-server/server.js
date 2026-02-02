@@ -32,8 +32,29 @@ const pool = new Pool({ connectionString: DATABASE_URL });
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
-const dailyVersesPath = path.join(__dirname, "..", "daily_verses.json");
-const dailyVerses = JSON.parse(fs.readFileSync(dailyVersesPath, "utf-8"));
+let dailyVerses = [];
+
+async function loadDailyVerses() {
+  const localPath = path.join(__dirname, "daily_verses.json");
+  const repoPath = path.join(__dirname, "..", "daily_verses.json");
+  const candidates = [localPath, repoPath];
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) {
+        dailyVerses = JSON.parse(fs.readFileSync(candidate, "utf-8"));
+        return;
+      }
+    } catch {
+      // ignore and try next
+    }
+  }
+  const remoteUrl = `${APP_URL.replace(/\/$/, "")}/daily_verses.json`;
+  const response = await fetch(remoteUrl);
+  if (!response.ok) {
+    throw new Error("Failed to fetch daily_verses.json");
+  }
+  dailyVerses = await response.json();
+}
 
 async function ensureSchema() {
   await pool.query(`
@@ -329,7 +350,8 @@ app.get("/healthz", (req, res) => {
   res.json({ ok: true });
 });
 
-ensureSchema()
+loadDailyVerses()
+  .then(() => ensureSchema())
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Push server running on ${PORT}`);
