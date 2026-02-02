@@ -4,7 +4,7 @@ import webpush from "web-push";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import cheerio from "cheerio";
+import * as cheerio from "cheerio";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
