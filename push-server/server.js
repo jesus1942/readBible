@@ -11,8 +11,8 @@ const __dirname = path.dirname(__filename);
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY ? process.env.VAPID_PUBLIC_KEY.trim() : "";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ? process.env.VAPID_PRIVATE_KEY.trim() : "";
 const CRON_SECRET = process.env.CRON_SECRET || "";
 const APP_URL = process.env.APP_URL || "https://jesus1942.github.io/readBible/";
 const DAILY_VERSION = process.env.DAILY_VERSION || "RVR1960";
