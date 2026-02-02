@@ -22,6 +22,7 @@ const BOOKS = [
 ];
 
 const TEXT_SUGGEST_LIMIT = 6;
+const PUSH_SERVER_URL = "https://readbible-push.up.railway.app";
 
 const unwantedTexts = [
   "Read the Bible", "Leer la Biblia",
@@ -85,6 +86,8 @@ const installButton = document.getElementById("installButton");
 const notesList = document.getElementById("notesList");
 const notesEmpty = document.getElementById("notesEmpty");
 const bigUiToggle = document.getElementById("bigUiToggle");
+const pushToggle = document.getElementById("pushToggle");
+const pushStatus = document.getElementById("pushStatus");
 const pickerBtn = document.getElementById("pickerBtn");
 const pickerOverlay = document.getElementById("pickerOverlay");
 const pickerClose = document.getElementById("pickerClose");
@@ -153,6 +156,144 @@ function readBigUi() {
 function applyBigUi(enabled) {
   document.body.classList.toggle("ui-large", enabled);
   if (bigUiToggle) bigUiToggle.checked = enabled;
+}
+
+function getPushServerUrl() {
+  try {
+    const override = localStorage.getItem("pushServerUrl");
+    if (override && override.trim()) return override.trim();
+  } catch {
+    // ignore
+  }
+  return PUSH_SERVER_URL;
+}
+
+function pushSupported() {
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i += 1) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+async function fetchVapidKey() {
+  const url = `${getPushServerUrl()}/vapid-public-key`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("vapid fetch failed");
+  const data = await response.json();
+  return data.key;
+}
+
+async function getPushSubscription() {
+  if (!pushSupported()) return null;
+  const reg = await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+
+function setPushStatus(text) {
+  if (pushStatus) pushStatus.textContent = text;
+}
+
+async function refreshPushStatus() {
+  if (!pushSupported()) {
+    setPushStatus("Notificaciones no soportadas en este dispositivo.");
+    if (pushToggle) pushToggle.disabled = true;
+    return;
+  }
+  const permission = Notification.permission;
+  if (permission === "denied") {
+    setPushStatus("Notificaciones bloqueadas en el navegador.");
+    if (pushToggle) {
+      pushToggle.textContent = "Notificaciones bloqueadas";
+      pushToggle.disabled = true;
+    }
+    return;
+  }
+  const sub = await getPushSubscription();
+  if (sub) {
+    setPushStatus("Notificaciones diarias activas.");
+    if (pushToggle) {
+      pushToggle.textContent = "Desactivar notificaciones";
+      pushToggle.disabled = false;
+    }
+  } else {
+    setPushStatus("Notificaciones diarias apagadas.");
+    if (pushToggle) {
+      pushToggle.textContent = "Activar notificaciones diarias";
+      pushToggle.disabled = false;
+    }
+  }
+}
+
+async function subscribeToPush() {
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    await refreshPushStatus();
+    return;
+  }
+  const reg = await navigator.serviceWorker.ready;
+  const vapidKey = await fetchVapidKey();
+  const subscription = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(vapidKey)
+  });
+  const payload = {
+    subscription,
+    userSeed: getUserSeed(),
+    themes: getSelectedThemes(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+  };
+  await fetch(`${getPushServerUrl()}/subscribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  await refreshPushStatus();
+}
+
+async function unsubscribeFromPush() {
+  const sub = await getPushSubscription();
+  if (!sub) return refreshPushStatus();
+  await fetch(`${getPushServerUrl()}/unsubscribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint: sub.endpoint })
+  });
+  await sub.unsubscribe();
+  await refreshPushStatus();
+}
+
+async function togglePushNotifications() {
+  if (!pushSupported()) return;
+  const sub = await getPushSubscription();
+  if (sub) {
+    await unsubscribeFromPush();
+  } else {
+    await subscribeToPush();
+  }
+}
+
+async function updatePushPreferences() {
+  const sub = await getPushSubscription();
+  if (!sub) return;
+  const payload = {
+    subscription: sub,
+    userSeed: getUserSeed(),
+    themes: getSelectedThemes(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+  };
+  await fetch(`${getPushServerUrl()}/subscribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
 }
 
 const PICKER_ITEM_HEIGHT = 36;
@@ -1814,6 +1955,11 @@ addListener(helpClose, "click", closeHelp);
 addListener(helpOverlay, "click", (event) => {
   if (event.target === helpOverlay) closeHelp();
 });
+addListener(pushToggle, "click", () => {
+  togglePushNotifications().catch(() => {
+    setPushStatus("No se pudo activar notificaciones.");
+  });
+});
 addListener(bigUiToggle, "change", () => {
   const enabled = !!bigUiToggle && bigUiToggle.checked;
   applyBigUi(enabled);
@@ -1909,10 +2055,16 @@ if (themeCheckboxes.length) {
     const selected = themeCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
     setSelectedThemes(selected);
     showDailyVerse();
+    updatePushPreferences().catch(() => {
+      // ignore
+    });
   });
 }
 
 initVersions();
+refreshPushStatus().catch(() => {
+  // ignore
+});
 restoreLastQuery();
 initSplash();
 function buildFetchUrls(url) {
@@ -2496,6 +2648,9 @@ function closeDailyVerse() {
 function openMenu() {
   if (!sideMenu) return;
   renderNotesIndex();
+  refreshPushStatus().catch(() => {
+    // ignore
+  });
   sideMenu.hidden = false;
 }
 
