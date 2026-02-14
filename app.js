@@ -117,6 +117,7 @@ const notesEmpty = document.getElementById("notesEmpty");
 const bigUiToggle = document.getElementById("bigUiToggle");
 const pushToggle = document.getElementById("pushToggle");
 const pushStatus = document.getElementById("pushStatus");
+const pushDebug = document.getElementById("pushDebug");
 const pickerBtn = document.getElementById("pickerBtn");
 const pickerOverlay = document.getElementById("pickerOverlay");
 const pickerClose = document.getElementById("pickerClose");
@@ -233,10 +234,21 @@ function setPushStatus(text) {
   if (pushStatus) pushStatus.textContent = text;
 }
 
+function setPushDebug(lines) {
+  if (!pushDebug) return;
+  pushDebug.textContent = lines.filter(Boolean).join("\n");
+}
+
 async function refreshPushStatus() {
   if (!pushSupported()) {
     setPushStatus("Notificaciones no soportadas en este dispositivo.");
     if (pushToggle) pushToggle.disabled = true;
+    setPushDebug([
+      `Soporte Push: no`,
+      `Service Worker: ${"serviceWorker" in navigator ? "si" : "no"}`,
+      `PushManager: ${"PushManager" in window ? "si" : "no"}`,
+      `Notification: ${"Notification" in window ? "si" : "no"}`
+    ]);
     return;
   }
   const permission = Notification.permission;
@@ -246,6 +258,11 @@ async function refreshPushStatus() {
       pushToggle.textContent = "Notificaciones bloqueadas";
       pushToggle.disabled = true;
     }
+    setPushDebug([
+      `Soporte Push: si`,
+      `Permiso: denied`,
+      `Servidor: ${getPushServerUrl()}`
+    ]);
     return;
   }
   const sub = await getPushSubscription();
@@ -262,44 +279,73 @@ async function refreshPushStatus() {
       pushToggle.disabled = false;
     }
   }
+  setPushDebug([
+    `Soporte Push: si`,
+    `Permiso: ${permission}`,
+    `Service Worker: listo`,
+    `Servidor: ${getPushServerUrl()}`,
+    `Suscripcion: ${sub ? "activa" : "ninguna"}`
+  ]);
 }
 
 async function subscribeToPush() {
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") {
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      await refreshPushStatus();
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const vapidKey = await fetchVapidKey();
+    const subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey)
+    });
+    const payload = {
+      subscription,
+      userSeed: getUserSeed(),
+      themes: getSelectedThemes(),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+    };
+    const response = await fetch(`${getPushServerUrl()}/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      throw new Error(`subscribe failed (${response.status})`);
+    }
     await refreshPushStatus();
-    return;
+  } catch (error) {
+    setPushStatus("No se pudo activar notificaciones.");
+    setPushDebug([
+      "Error al suscribir:",
+      String(error && error.message ? error.message : error)
+    ]);
   }
-  const reg = await navigator.serviceWorker.ready;
-  const vapidKey = await fetchVapidKey();
-  const subscription = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(vapidKey)
-  });
-  const payload = {
-    subscription,
-    userSeed: getUserSeed(),
-    themes: getSelectedThemes(),
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
-  };
-  await fetch(`${getPushServerUrl()}/subscribe`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  await refreshPushStatus();
 }
 
 async function unsubscribeFromPush() {
-  const sub = await getPushSubscription();
-  if (!sub) return refreshPushStatus();
-  await fetch(`${getPushServerUrl()}/unsubscribe`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ endpoint: sub.endpoint })
-  });
-  await sub.unsubscribe();
-  await refreshPushStatus();
+  try {
+    const sub = await getPushSubscription();
+    if (!sub) return refreshPushStatus();
+    const response = await fetch(`${getPushServerUrl()}/unsubscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: sub.endpoint })
+    });
+    if (!response.ok) {
+      throw new Error(`unsubscribe failed (${response.status})`);
+    }
+    await sub.unsubscribe();
+    await refreshPushStatus();
+  } catch (error) {
+    setPushStatus("No se pudo desactivar notificaciones.");
+    setPushDebug([
+      "Error al desuscribir:",
+      String(error && error.message ? error.message : error)
+    ]);
+  }
 }
 
 async function togglePushNotifications() {

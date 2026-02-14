@@ -705,6 +705,14 @@ button {
   margin-top: 4px;
 }
 
+.push-debug {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #8a6b44;
+  line-height: 1.4;
+  white-space: pre-line;
+}
+
 .install-button {
   background: #f39c12;
   color: #2b1a0e;

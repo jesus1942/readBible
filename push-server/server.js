@@ -17,6 +17,10 @@ const CRON_SECRET = process.env.CRON_SECRET || "";
 const APP_URL = process.env.APP_URL || "https://jesus1942.github.io/readBible/";
 const DAILY_VERSION = process.env.DAILY_VERSION || "RVR1960";
 const CRON_WINDOW_MINUTES = Number(process.env.CRON_WINDOW_MINUTES || 15);
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 if (!DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -30,6 +34,26 @@ webpush.setVapidDetails("mailto:admin@readbible.app", VAPID_PUBLIC_KEY, VAPID_PR
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 const app = express();
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  const allowlist = CORS_ORIGINS.length
+    ? CORS_ORIGINS
+    : [
+      "https://jesus1942.github.io",
+      "http://localhost:8000",
+      "http://127.0.0.1:8000"
+    ];
+  if (origin && allowlist.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Cron-Secret");
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+  return next();
+});
 app.use(express.json({ limit: "1mb" }));
 
 let dailyVerses = [];
