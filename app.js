@@ -317,10 +317,19 @@ async function subscribeToPush() {
     }
     await refreshPushStatus();
   } catch (error) {
+    let keyInfo = "";
+    try {
+      const key = await fetchVapidKey();
+      keyInfo = `VAPID length: ${String(key || "").length}`;
+    } catch (keyErr) {
+      keyInfo = `VAPID fetch: ${String(keyErr && keyErr.message ? keyErr.message : keyErr)}`;
+    }
     setPushStatus("No se pudo activar notificaciones.");
     setPushDebug([
       "Error al suscribir:",
-      String(error && error.message ? error.message : error)
+      String(error && error.message ? error.message : error),
+      keyInfo,
+      `Permiso: ${Notification.permission}`
     ]);
   }
 }
