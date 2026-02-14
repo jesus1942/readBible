@@ -7,19 +7,22 @@ const versions = [
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24;
 const DAILY_VERSION = "RVR1960";
 const RECENT_LIMIT = 5;
-const BOOKS = [
+const OLD_TESTAMENT_BOOKS = [
   "Génesis", "Éxodo", "Levítico", "Números", "Deuteronomio",
   "Josué", "Jueces", "Rut", "1 Samuel", "2 Samuel", "1 Reyes", "2 Reyes",
   "1 Crónicas", "2 Crónicas", "Esdras", "Nehemías", "Ester", "Job", "Salmos",
   "Proverbios", "Eclesiastés", "Cantares", "Isaías", "Jeremías", "Lamentaciones",
   "Ezequiel", "Daniel", "Oseas", "Joel", "Amós", "Abdías", "Jonás", "Miqueas",
-  "Nahúm", "Habacuc", "Sofonías", "Hageo", "Zacarías", "Malaquías",
+  "Nahúm", "Habacuc", "Sofonías", "Hageo", "Zacarías", "Malaquías"
+];
+const NEW_TESTAMENT_BOOKS = [
   "Mateo", "Marcos", "Lucas", "Juan", "Hechos", "Romanos", "1 Corintios",
   "2 Corintios", "Gálatas", "Efesios", "Filipenses", "Colosenses",
   "1 Tesalonicenses", "2 Tesalonicenses", "1 Timoteo", "2 Timoteo",
   "Tito", "Filemón", "Hebreos", "Santiago", "1 Pedro", "2 Pedro",
   "1 Juan", "2 Juan", "3 Juan", "Judas", "Apocalipsis"
 ];
+const BOOKS = [...OLD_TESTAMENT_BOOKS, ...NEW_TESTAMENT_BOOKS];
 
 const TEXT_SUGGEST_LIMIT = 6;
 const PUSH_SERVER_URL = "https://versiculodiario-production.up.railway.app";
@@ -118,6 +121,8 @@ const pickerBtn = document.getElementById("pickerBtn");
 const pickerOverlay = document.getElementById("pickerOverlay");
 const pickerClose = document.getElementById("pickerClose");
 const pickerApply = document.getElementById("pickerApply");
+const pickerOld = document.getElementById("pickerOld");
+const pickerNew = document.getElementById("pickerNew");
 const pickerBook = document.getElementById("pickerBook");
 const pickerChapter = document.getElementById("pickerChapter");
 const pickerVerse = document.getElementById("pickerVerse");
@@ -170,6 +175,7 @@ let pickerState = {
   chapter: 1,
   verse: 1
 };
+let pickerTestament = "old";
 
 function readBigUi() {
   try {
@@ -616,6 +622,14 @@ function buildSuggestionGroup(title, items) {
   return `<div class="suggestion-group"><div class="suggestion-title">${title}</div>${list}</div>`;
 }
 
+function getBookTestament(book) {
+  return OLD_TESTAMENT_BOOKS.includes(book) ? "old" : "new";
+}
+
+function getTestamentLabel(testament) {
+  return testament === "old" ? "Antiguo Testamento" : "Nuevo Testamento";
+}
+
 function updateSuggestions() {
   if (!querySuggestions) return;
   const raw = queryInput.value || "";
@@ -626,7 +640,10 @@ function updateSuggestions() {
     return;
   }
 
-  const bookMatches = BOOKS.filter((book) =>
+  const oldMatches = OLD_TESTAMENT_BOOKS.filter((book) =>
+    normalizeForMatch(book).startsWith(input)
+  ).slice(0, RECENT_LIMIT);
+  const newMatches = NEW_TESTAMENT_BOOKS.filter((book) =>
     normalizeForMatch(book).startsWith(input)
   ).slice(0, RECENT_LIMIT);
 
@@ -637,7 +654,8 @@ function updateSuggestions() {
   const textMatches = isTextSearchInput(raw) ? textSuggestResults : [];
 
   const html = [
-    buildSuggestionGroup("Libros", bookMatches.map((b) => `${b} `)),
+    buildSuggestionGroup(getTestamentLabel("old"), oldMatches.map((b) => `${b} `)),
+    buildSuggestionGroup(getTestamentLabel("new"), newMatches.map((b) => `${b} `)),
     buildSuggestionGroup("Recientes", recentMatches),
     buildSuggestionGroup("Texto", textMatches)
   ].filter(Boolean).join("");
@@ -1182,11 +1200,46 @@ function updatePickerChapters() {
   renderPickerColumn(pickerChapter, chapterItems, chapterIndex);
 }
 
+function getCurrentPickerBooks() {
+  return pickerTestament === "old" ? OLD_TESTAMENT_BOOKS : NEW_TESTAMENT_BOOKS;
+}
+
+function updatePickerTestamentButtons() {
+  if (pickerOld) {
+    pickerOld.classList.toggle("active", pickerTestament === "old");
+    pickerOld.setAttribute("aria-pressed", pickerTestament === "old" ? "true" : "false");
+  }
+  if (pickerNew) {
+    pickerNew.classList.toggle("active", pickerTestament === "new");
+    pickerNew.setAttribute("aria-pressed", pickerTestament === "new" ? "true" : "false");
+  }
+}
+
+async function setPickerTestament(next) {
+  if (next === pickerTestament) return;
+  pickerTestament = next;
+  const bookItems = getCurrentPickerBooks();
+  const currentBook = BOOKS[pickerState.bookIndex];
+  if (!bookItems.includes(currentBook)) {
+    pickerState.bookIndex = BOOKS.indexOf(bookItems[0]);
+    pickerState.chapter = 1;
+    pickerState.verse = 1;
+    updatePickerChapters();
+    await updatePickerVerses();
+  }
+  updatePickerBooks();
+}
+
 function updatePickerBooks() {
-  const bookItems = BOOKS;
-  const bookIndex = Math.max(0, Math.min(bookItems.length - 1, pickerState.bookIndex));
-  pickerState.bookIndex = bookIndex;
+  const bookItems = getCurrentPickerBooks();
+  const currentBook = BOOKS[pickerState.bookIndex];
+  let bookIndex = bookItems.indexOf(currentBook);
+  if (bookIndex === -1) {
+    bookIndex = 0;
+    pickerState.bookIndex = BOOKS.indexOf(bookItems[0]);
+  }
   renderPickerColumn(pickerBook, bookItems, bookIndex);
+  updatePickerTestamentButtons();
 }
 
 async function initPickerStateFromInput() {
@@ -1195,6 +1248,9 @@ async function initPickerStateFromInput() {
     pickerState.bookIndex = BOOKS.indexOf(parsed.book);
     pickerState.chapter = parsed.chapter;
     pickerState.verse = parsed.verseStart;
+    pickerTestament = getBookTestament(parsed.book);
+  } else {
+    pickerTestament = getBookTestament(BOOKS[pickerState.bookIndex]);
   }
   updatePickerBooks();
   updatePickerChapters();
@@ -1265,19 +1321,36 @@ function renderNotesIndex() {
   entries.sort((a, b) => b.updatedAt - a.updatedAt);
   notesList.innerHTML = "";
   notesEmpty.hidden = entries.length > 0;
+  const grouped = {
+    old: [],
+    new: []
+  };
   entries.forEach((entry) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "note-link";
-    button.dataset.studyKey = entry.key;
-    button.textContent = buildReference(entry.parsed.book, entry.parsed.chapter, entry.parsed.verseStart, entry.parsed.verseEnd, entry.parsed.version);
-    if (entry.notesCount > 0) {
-      const meta = document.createElement("small");
-      meta.textContent = entry.notesCount === 1 ? "1 nota" : `${entry.notesCount} notas`;
-      button.appendChild(meta);
-    }
-    notesList.appendChild(button);
+    const testament = getBookTestament(entry.parsed.book);
+    grouped[testament].push(entry);
   });
+  const renderGroup = (label, group) => {
+    if (!group.length) return;
+    const heading = document.createElement("div");
+    heading.className = "notes-group";
+    heading.textContent = label;
+    notesList.appendChild(heading);
+    group.forEach((entry) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "note-link";
+      button.dataset.studyKey = entry.key;
+      button.textContent = buildReference(entry.parsed.book, entry.parsed.chapter, entry.parsed.verseStart, entry.parsed.verseEnd, entry.parsed.version);
+      if (entry.notesCount > 0) {
+        const meta = document.createElement("small");
+        meta.textContent = entry.notesCount === 1 ? "1 nota" : `${entry.notesCount} notas`;
+        button.appendChild(meta);
+      }
+      notesList.appendChild(button);
+    });
+  };
+  renderGroup(getTestamentLabel("old"), grouped.old);
+  renderGroup(getTestamentLabel("new"), grouped.new);
 }
 
 function openNoteFromIndex(key) {
@@ -1922,9 +1995,14 @@ addListener(pickerOverlay, "click", (event) => {
   if (event.target === pickerOverlay) closePicker();
 });
 addListener(pickerApply, "click", applyPickerSelection);
+addListener(pickerOld, "click", () => setPickerTestament("old"));
+addListener(pickerNew, "click", () => setPickerTestament("new"));
 
 attachPickerScroll(pickerBook, async (index) => {
-  pickerState.bookIndex = index;
+  const bookItems = getCurrentPickerBooks();
+  const book = bookItems[index];
+  if (!book) return;
+  pickerState.bookIndex = BOOKS.indexOf(book);
   pickerState.chapter = 1;
   pickerState.verse = 1;
   updatePickerChapters();
