@@ -24,6 +24,32 @@ const BOOKS = [
 const TEXT_SUGGEST_LIMIT = 6;
 const PUSH_SERVER_URL = "https://versiculodiario-production.up.railway.app";
 
+const ReadBibleCore = typeof window !== "undefined" ? window.ReadBibleCore : null;
+if (!ReadBibleCore) {
+  console.error("ReadBibleCore missing. Ensure core.js is loaded before app.js.");
+}
+const {
+  normalizeReferenceInput,
+  parseReference,
+  buildReference,
+  formatBookDisplay,
+  sanitizeReferenceString,
+  buildReferenceInput,
+  buildCacheKey,
+  buildChapterCacheKey,
+  parseStudyKey
+} = ReadBibleCore || {};
+
+const ReadBibleNet = typeof window !== "undefined" ? window.ReadBibleNet : null;
+if (!ReadBibleNet) {
+  console.error("ReadBibleNet missing. Ensure net.js is loaded before app.js.");
+}
+const {
+  buildFetchUrls,
+  fetchFirstHtml,
+  fetchJson
+} = ReadBibleNet || {};
+
 const unwantedTexts = [
   "Read the Bible", "Leer la Biblia",
   "StudyTools", "Herramientas",
@@ -376,40 +402,6 @@ function initVersions() {
   applyBigUi(readBigUi());
 }
 
-function normalizeReferenceInput(text) {
-  return text.replace(/\s+/g, " ").trim().replace(/^(\d)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])/, "$1$2");
-}
-
-function parseReference(text) {
-  const normalized = normalizeReferenceInput(text);
-  const pattern = /^([0-9]?[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+(?:\s+[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)*)\s+(\d+):(\d+)(?:-(\d+))?$/;
-  const match = normalized.match(pattern);
-  if (!match) return null;
-  const book = match[1];
-  const chapter = parseInt(match[2], 10);
-  const verseStart = parseInt(match[3], 10);
-  const verseEnd = match[4] ? parseInt(match[4], 10) : verseStart;
-  return { book, chapter, verseStart, verseEnd };
-}
-
-function buildReference(book, chapter, verseStart, verseEnd, version) {
-  const bookDisplay = book.replace(/^(\d)([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])/, "$1 $2");
-  if (verseStart === verseEnd) {
-    return `${bookDisplay} ${chapter}:${verseStart} (${version})`;
-  }
-  return `${bookDisplay} ${chapter}:${verseStart}-${verseEnd} (${version})`;
-}
-
-function formatBookDisplay(book) {
-  return book.replace(/^(\d)([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])/, "$1 $2");
-}
-
-function sanitizeReferenceString(reference) {
-  if (!reference) return "";
-  let cleaned = reference.split(";")[0].trim();
-  cleaned = cleaned.replace(/\s+/g, " ");
-  return cleaned;
-}
 
 function getUserSeed() {
   if (userSeed) return userSeed;
@@ -448,59 +440,6 @@ function setSelectedThemes(themes) {
   }
 }
 
-function readProxyStats() {
-  try {
-    const raw = localStorage.getItem("proxyStats");
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeProxyStats(stats) {
-  try {
-    localStorage.setItem("proxyStats", JSON.stringify(stats));
-  } catch {
-    // ignore
-  }
-}
-
-function recordProxyTiming(url, ms, ok) {
-  const stats = readProxyStats();
-  const entry = stats[url] || { count: 0, avgMs: 0, ok: 0, fail: 0 };
-  entry.count += 1;
-  if (ok) entry.ok += 1;
-  else entry.fail += 1;
-  if (Number.isFinite(ms)) {
-    entry.avgMs = entry.count === 1 ? ms : (entry.avgMs * 0.7 + ms * 0.3);
-  }
-  stats[url] = entry;
-  writeProxyStats(stats);
-}
-
-function isProxyDebugEnabled() {
-  try {
-    return localStorage.getItem("debugProxy") === "1";
-  } catch {
-    return false;
-  }
-}
-
-function orderProxies(urls) {
-  const stats = readProxyStats();
-  return [...urls].sort((a, b) => {
-    const sa = stats[a];
-    const sb = stats[b];
-    if (!sa && !sb) return 0;
-    if (!sa) return 1;
-    if (!sb) return -1;
-    if (sa.ok !== sb.ok) return sb.ok - sa.ok;
-    if (sa.avgMs !== sb.avgMs) return sa.avgMs - sb.avgMs;
-    return sa.fail - sb.fail;
-  });
-}
 
 function readDailyVerseCache() {
   try {
@@ -1088,28 +1027,6 @@ function hasStudyData(data) {
   if (Array.isArray(data.notes) && data.notes.some((n) => n && n.text && n.text.trim())) return true;
   if (data.sermonDate && String(data.sermonDate).trim()) return true;
   return false;
-}
-
-function parseStudyKey(key) {
-  if (!key || !key.startsWith("study:verse:")) return null;
-  const parts = key.split(":");
-  if (parts.length < 6) return null;
-  const book = parts[2];
-  const chapter = Number(parts[3]);
-  if (!Number.isFinite(chapter)) return null;
-  const verseRange = parts[4];
-  const version = parts.slice(5).join(":");
-  const [startRaw, endRaw] = verseRange.split("-");
-  const verseStart = Number(startRaw);
-  const verseEnd = Number(endRaw || startRaw);
-  if (!Number.isFinite(verseStart) || !Number.isFinite(verseEnd)) return null;
-  return { book, chapter, verseStart, verseEnd, version };
-}
-
-function buildReferenceInput(book, chapter, verseStart, verseEnd) {
-  const bookDisplay = formatBookDisplay(book);
-  const versePart = verseStart === verseEnd ? `${verseStart}` : `${verseStart}-${verseEnd}`;
-  return `${bookDisplay} ${chapter}:${versePart}`;
 }
 
 function readVerseCountCache(key) {
@@ -2067,87 +1984,6 @@ refreshPushStatus().catch(() => {
 });
 restoreLastQuery();
 initSplash();
-function buildFetchUrls(url) {
-  const encoded = encodeURIComponent(url);
-  const urls = [
-    `${location.origin}/proxy?url=${encoded}`,
-    `https://readbible-production.up.railway.app/?url=${encoded}`,
-    `https://corsproxy.io/?url=${encoded}`,
-    `https://corsproxy.org/?${encoded}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
-    `https://api.allorigins.win/raw?url=${encoded}`
-  ];
-  if (location.hostname.endsWith("github.io")) {
-    return orderProxies(urls.slice(1));
-  }
-  return orderProxies(urls);
-}
-
-function anyResolve(promises) {
-  return new Promise((resolve, reject) => {
-    let pending = promises.length;
-    if (!pending) {
-      reject(new Error("No promises"));
-      return;
-    }
-    promises.forEach((p) => {
-      Promise.resolve(p).then(resolve, (err) => {
-        pending -= 1;
-        if (pending === 0) reject(err);
-      });
-    });
-  });
-}
-
-async function fetchWithTimeout(url, timeoutMs, controller) {
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const start = performance.now();
-  try {
-    const response = await fetch(url, { signal: controller.signal });
-    if (!response.ok) throw new Error("bad response");
-    const text = await response.text();
-    if (!text || text.length <= 500) throw new Error("short response");
-    recordProxyTiming(url, performance.now() - start, true);
-    if (isProxyDebugEnabled()) {
-      console.log("[proxy ok]", Math.round(performance.now() - start), "ms", url);
-    }
-    return text;
-  } catch (error) {
-    if (error && error.name === "AbortError") {
-      if (isProxyDebugEnabled()) {
-        console.log("[proxy abort]", Math.round(performance.now() - start), "ms", url);
-      }
-      throw error;
-    }
-    recordProxyTiming(url, performance.now() - start, false);
-    if (isProxyDebugEnabled()) {
-      console.log("[proxy fail]", Math.round(performance.now() - start), "ms", url);
-    }
-    throw new Error("fetch failed");
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function fetchFirstHtml(urls, timeoutMs) {
-  const ordered = orderProxies(urls);
-  const controllers = ordered.map(() => new AbortController());
-  try {
-    const staggerMs = 250;
-    const attempts = ordered.map((url, index) => new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        fetchWithTimeout(url, timeoutMs, controllers[index]).then(resolve, reject);
-      }, index * staggerMs);
-      controllers[index].signal.addEventListener("abort", () => clearTimeout(timer), { once: true });
-    }));
-    const html = await anyResolve(attempts);
-    controllers.forEach((ctrl) => ctrl.abort());
-    return html;
-  } catch {
-    controllers.forEach((ctrl) => ctrl.abort());
-    return "";
-  }
-}
 
 function initSplash() {
   splash.hidden = false;
@@ -2681,11 +2517,6 @@ function showHelpIfFirstTime() {
   }
 }
 
-async function fetchJson(path) {
-  const response = await fetch(path);
-  if (!response.ok) throw new Error("fetch failed");
-  return response.json();
-}
 
 async function fetchVerseByReference(reference, version) {
   const parsed = parseReference(reference);
@@ -2800,14 +2631,6 @@ function drawCenteredText(ctx, text, totalWidth, y) {
   const metrics = ctx.measureText(text);
   const x = (totalWidth - metrics.width) / 2;
   ctx.fillText(text, x, y);
-}
-
-function buildCacheKey(parsed, version) {
-  return `verse:${parsed.book}:${parsed.chapter}:${parsed.verseStart}-${parsed.verseEnd}:${version}`;
-}
-
-function buildChapterCacheKey(parsed, version) {
-  return `chapter:${parsed.book}:${parsed.chapter}:${version}`;
 }
 
 function readCache(key) {
