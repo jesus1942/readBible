@@ -118,6 +118,7 @@ const bigUiToggle = document.getElementById("bigUiToggle");
 const pushToggle = document.getElementById("pushToggle");
 const pushStatus = document.getElementById("pushStatus");
 const pushDebug = document.getElementById("pushDebug");
+const pushResubscribe = document.getElementById("pushResubscribe");
 const pickerBtn = document.getElementById("pickerBtn");
 const pickerOverlay = document.getElementById("pickerOverlay");
 const pickerClose = document.getElementById("pickerClose");
@@ -371,6 +372,24 @@ async function togglePushNotifications() {
   } else {
     await subscribeToPush();
   }
+}
+
+async function resubscribePushNotifications() {
+  if (!pushSupported()) return;
+  try {
+    const sub = await getPushSubscription();
+    if (sub) {
+      await fetch(`${getPushServerUrl()}/unsubscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: sub.endpoint })
+      });
+      await sub.unsubscribe();
+    }
+  } catch {
+    // ignore and attempt to subscribe anyway
+  }
+  await subscribeToPush();
 }
 
 async function updatePushPreferences() {
@@ -2009,6 +2028,11 @@ addListener(helpOverlay, "click", (event) => {
 addListener(pushToggle, "click", () => {
   togglePushNotifications().catch(() => {
     setPushStatus("No se pudo activar notificaciones.");
+  });
+});
+addListener(pushResubscribe, "click", () => {
+  resubscribePushNotifications().catch(() => {
+    setPushStatus("No se pudo reintentar notificaciones.");
   });
 });
 addListener(bigUiToggle, "change", () => {
