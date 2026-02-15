@@ -415,7 +415,9 @@ app.post("/send-test", async (req, res) => {
         });
       }
     }
-    return res.json({ ok: true, count: results.length });
+    const okCount = results.filter((r) => r.ok).length;
+    const failCount = results.length - okCount;
+    return res.json({ ok: true, count: results.length, okCount, failCount, results });
   } finally {
     client.release();
   }
