@@ -423,6 +423,19 @@ app.post("/send-test", async (req, res) => {
   }
 });
 
+app.get("/subscriptions/count", async (req, res) => {
+  if (CRON_SECRET && req.headers["x-cron-secret"] !== CRON_SECRET) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query("SELECT COUNT(*)::int AS count FROM push_subscriptions");
+    return res.json({ ok: true, count: rows[0].count });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/", (req, res) => {
   res.status(200).send("ok");
 });
