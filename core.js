@@ -3,12 +3,19 @@
     return text.replace(/\s+/g, " ").trim().replace(/^(\d)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])/, "$1$2");
   }
 
+  function normalizeBookAlias(book) {
+    const trimmed = String(book || "").replace(/\s+/g, " ").trim();
+    const lower = trimmed.toLowerCase();
+    if (lower === "salmo" || lower === "sal") return "Salmos";
+    return trimmed;
+  }
+
   function parseReference(text) {
     const normalized = normalizeReferenceInput(text);
     const pattern = /^([0-9]?[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+(?:\s+[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)*)\s+(\d+):(\d+)(?:-(\d+))?$/;
     const match = normalized.match(pattern);
     if (!match) return null;
-    const book = match[1];
+    const book = normalizeBookAlias(match[1]);
     const chapter = parseInt(match[2], 10);
     const verseStart = parseInt(match[3], 10);
     const verseEnd = match[4] ? parseInt(match[4], 10) : verseStart;
@@ -73,7 +80,8 @@
     sanitizeReferenceString,
     buildCacheKey,
     buildChapterCacheKey,
-    parseStudyKey
+    parseStudyKey,
+    normalizeBookAlias
   };
 
   global.ReadBibleCore = api;

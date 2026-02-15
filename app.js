@@ -324,10 +324,16 @@ async function subscribeToPush() {
     } catch (keyErr) {
       keyInfo = `VAPID fetch: ${String(keyErr && keyErr.message ? keyErr.message : keyErr)}`;
     }
+    const errorName = error && error.name ? error.name : "";
+    const errorCode = error && typeof error.code !== "undefined" ? String(error.code) : "";
+    const errorStack = error && error.stack ? String(error.stack).split("\n")[0] : "";
     setPushStatus("No se pudo activar notificaciones.");
     setPushDebug([
       "Error al suscribir:",
       String(error && error.message ? error.message : error),
+      errorName ? `Nombre: ${errorName}` : "",
+      errorCode ? `Codigo: ${errorCode}` : "",
+      errorStack ? `Stack: ${errorStack}` : "",
       keyInfo,
       `Permiso: ${Notification.permission}`
     ]);
