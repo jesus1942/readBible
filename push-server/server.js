@@ -409,7 +409,12 @@ app.post("/send-test", async (req, res) => {
         if (status === 404 || status === 410) {
           await client.query("DELETE FROM push_subscriptions WHERE id = $1", [row.id]);
         }
-        results.push({ id: row.id, ok: false });
+        results.push({
+          id: row.id,
+          ok: false,
+          status,
+          message: err && err.message ? err.message : String(err)
+        });
       }
     }
     return res.json({ ok: true, count: results.length });
