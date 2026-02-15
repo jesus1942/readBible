@@ -57,10 +57,10 @@
     const encoded = encodeURIComponent(url);
     const urls = [
       `${location.origin}/proxy?url=${encoded}`,
-      `https://readbible-production.up.railway.app/?url=${encoded}`,
+      `https://versiculodiario-production.up.railway.app/proxy?url=${encoded}`,
       `https://corsproxy.io/?url=${encoded}`,
       `https://corsproxy.org/?${encoded}`,
-      `https://api.codetabs.com/v1/proxy?quest=${encoded}`,
+      `https://api.codetabs.com/v1/proxy/?quest=${encoded}`,
       `https://api.allorigins.win/raw?url=${encoded}`
     ];
     if (location.hostname.endsWith("github.io")) {

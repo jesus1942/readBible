@@ -503,6 +503,22 @@ app.post("/send-segment", async (req, res) => {
   }
 });
 
+app.get("/proxy", async (req, res) => {
+  const target = req.query && req.query.url ? String(req.query.url) : "";
+  if (!target) return res.status(400).send("Missing url parameter");
+  try {
+    const response = await fetch(target, {
+      headers: { "User-Agent": "ReadBible-Proxy/1.0" }
+    });
+    const contentType = response.headers.get("content-type") || "text/html";
+    const body = await response.text();
+    res.setHeader("Content-Type", contentType);
+    return res.status(response.status).send(body);
+  } catch (err) {
+    return res.status(502).send(`Proxy error: ${err && err.message ? err.message : String(err)}`);
+  }
+});
+
 app.get("/subscriptions/count", async (req, res) => {
   if (CRON_SECRET && req.headers["x-cron-secret"] !== CRON_SECRET) {
     return res.status(401).json({ error: "unauthorized" });
