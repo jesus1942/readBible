@@ -370,6 +370,54 @@ app.post("/send-daily", async (req, res) => {
   }
 });
 
+app.post("/send-test", async (req, res) => {
+  if (CRON_SECRET && req.headers["x-cron-secret"] !== CRON_SECRET) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  const endpoint = req.body && req.body.endpoint ? String(req.body.endpoint) : "";
+  const client = await pool.connect();
+  try {
+    const { rows } = endpoint
+      ? await client.query("SELECT * FROM push_subscriptions WHERE endpoint = $1", [endpoint])
+      : await client.query("SELECT * FROM push_subscriptions");
+    if (!rows.length) return res.json({ ok: true, count: 0 });
+    const results = [];
+    for (const row of rows) {
+      const reference = getDailyReference(row.user_seed, row.themes || [], row.timezone || "UTC");
+      const verseText = await fetchVerseText(reference, DAILY_VERSION);
+      const title = "Versículo de prueba";
+      const body = verseText ? `${verseText} — ${reference} (${DAILY_VERSION})` : `Prueba: ${reference} (${DAILY_VERSION})`;
+      const payload = JSON.stringify({
+        title,
+        body,
+        url: APP_URL
+      });
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: row.endpoint,
+            keys: {
+              p256dh: row.p256dh,
+              auth: row.auth
+            }
+          },
+          payload
+        );
+        results.push({ id: row.id, ok: true });
+      } catch (err) {
+        const status = err.statusCode || err.status || 0;
+        if (status === 404 || status === 410) {
+          await client.query("DELETE FROM push_subscriptions WHERE id = $1", [row.id]);
+        }
+        results.push({ id: row.id, ok: false });
+      }
+    }
+    return res.json({ ok: true, count: results.length });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/healthz", (req, res) => {
   res.json({ ok: true });
 });
