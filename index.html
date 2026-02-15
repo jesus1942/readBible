@@ -168,6 +168,14 @@
           <p id="pushDebug" class="about-text push-debug"></p>
         </div>
         <div class="side-menu-about">
+          <p class="eyebrow">Comunidad</p>
+          <label for="communityCity">Ciudad</label>
+          <input id="communityCity" type="text" placeholder="Ej: Puerto Madryn" />
+          <label for="communityChurch">Iglesia</label>
+          <input id="communityChurch" type="text" placeholder="Ej: HDR" />
+          <button id="communitySave" class="ghost">Guardar comunidad</button>
+        </div>
+        <div class="side-menu-about">
           <p class="eyebrow">Acerca de</p>
           <p class="about-text">BibleApp, lectura biblica sin distracciones.</p>
           <p class="about-version">Version v1.0.0</p>
@@ -228,7 +236,7 @@
     ></script>
     <script src="core.js?v=2"></script>
     <script src="net.js?v=1"></script>
-    <script src="app.js?v=69"></script>
+    <script src="app.js?v=70"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;

@@ -119,6 +119,9 @@ const pushToggle = document.getElementById("pushToggle");
 const pushStatus = document.getElementById("pushStatus");
 const pushDebug = document.getElementById("pushDebug");
 const pushResubscribe = document.getElementById("pushResubscribe");
+const communityCity = document.getElementById("communityCity");
+const communityChurch = document.getElementById("communityChurch");
+const communitySave = document.getElementById("communitySave");
 const pickerBtn = document.getElementById("pickerBtn");
 const pickerOverlay = document.getElementById("pickerOverlay");
 const pickerClose = document.getElementById("pickerClose");
@@ -184,6 +187,28 @@ function readBigUi() {
     return localStorage.getItem("bigUi") === "1";
   } catch {
     return false;
+  }
+}
+
+function readCommunityInfo() {
+  try {
+    const raw = localStorage.getItem("communityInfo");
+    if (!raw) return { city: "", church: "" };
+    const parsed = JSON.parse(raw);
+    return {
+      city: String(parsed.city || ""),
+      church: String(parsed.church || "")
+    };
+  } catch {
+    return { city: "", church: "" };
+  }
+}
+
+function writeCommunityInfo(info) {
+  try {
+    localStorage.setItem("communityInfo", JSON.stringify(info));
+  } catch {
+    // ignore
   }
 }
 
@@ -302,11 +327,14 @@ async function subscribeToPush() {
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(vapidKey)
     });
+    const community = readCommunityInfo();
     const payload = {
       subscription,
       userSeed: getUserSeed(),
       themes: getSelectedThemes(),
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+      city: community.city,
+      church: community.church
     };
     const response = await fetch(`${getPushServerUrl()}/subscribe`, {
       method: "POST",
@@ -395,11 +423,14 @@ async function resubscribePushNotifications() {
 async function updatePushPreferences() {
   const sub = await getPushSubscription();
   if (!sub) return;
+  const community = readCommunityInfo();
   const payload = {
     subscription: sub,
     userSeed: getUserSeed(),
     themes: getSelectedThemes(),
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    city: community.city,
+    church: community.church
   };
   await fetch(`${getPushServerUrl()}/subscribe`, {
     method: "POST",
@@ -2035,6 +2066,14 @@ addListener(pushResubscribe, "click", () => {
     setPushStatus("No se pudo reintentar notificaciones.");
   });
 });
+addListener(communitySave, "click", () => {
+  const city = communityCity ? communityCity.value.trim() : "";
+  const church = communityChurch ? communityChurch.value.trim() : "";
+  writeCommunityInfo({ city, church });
+  updatePushPreferences().catch(() => {
+    // ignore
+  });
+});
 addListener(bigUiToggle, "change", () => {
   const enabled = !!bigUiToggle && bigUiToggle.checked;
   applyBigUi(enabled);
@@ -2147,6 +2186,9 @@ refreshPushStatus().catch(() => {
 });
 restoreLastQuery();
 initSplash();
+const communityInfo = readCommunityInfo();
+if (communityCity) communityCity.value = communityInfo.city;
+if (communityChurch) communityChurch.value = communityInfo.church;
 
 function initSplash() {
   splash.hidden = false;

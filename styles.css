@@ -889,6 +889,27 @@ button {
   height: 18px;
 }
 
+.side-menu-about label {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #8a6b44;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.side-menu-about input[type="text"] {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(59, 44, 25, 0.15);
+  background: #f8efe2;
+  color: #3b2c19;
+  font-size: 14px;
+}
+
 .ui-large {
   font-size: 1.08em;
 }

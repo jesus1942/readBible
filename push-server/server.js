@@ -90,16 +90,22 @@ async function ensureSchema() {
       user_seed TEXT NOT NULL,
       themes JSONB NOT NULL DEFAULT '[]'::jsonb,
       timezone TEXT NOT NULL DEFAULT 'UTC',
+      city TEXT,
+      church TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       last_sent_date TEXT,
       last_sent_at TIMESTAMPTZ
     );
   `);
+  await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS city TEXT;`);
+  await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS church TEXT;`);
   await pool.query(`
     CREATE INDEX IF NOT EXISTS push_subscriptions_timezone_idx
     ON push_subscriptions (timezone);
   `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS push_subscriptions_city_idx ON push_subscriptions (city);`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS push_subscriptions_church_idx ON push_subscriptions (church);`);
 }
 
 function normalizeThemes(themes) {
@@ -264,7 +270,7 @@ app.get("/vapid-public-key", (req, res) => {
 });
 
 app.post("/subscribe", async (req, res) => {
-  const { subscription, userSeed, themes, timeZone } = req.body || {};
+  const { subscription, userSeed, themes, timeZone, city, church } = req.body || {};
   if (!subscription || !subscription.endpoint || !subscription.keys) {
     return res.status(400).json({ error: "invalid subscription" });
   }
@@ -273,17 +279,21 @@ app.post("/subscribe", async (req, res) => {
   }
   const normalizedThemes = normalizeThemes(themes);
   const tz = typeof timeZone === "string" && timeZone.trim() ? timeZone.trim() : "UTC";
+  const normalizedCity = typeof city === "string" && city.trim() ? city.trim() : null;
+  const normalizedChurch = typeof church === "string" && church.trim() ? church.trim() : null;
   const client = await pool.connect();
   try {
     await client.query(
-      `INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_seed, themes, timezone, updated_at)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW())
+      `INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_seed, themes, timezone, city, church, updated_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, NOW())
        ON CONFLICT (endpoint) DO UPDATE SET
          p256dh = EXCLUDED.p256dh,
          auth = EXCLUDED.auth,
          user_seed = EXCLUDED.user_seed,
          themes = EXCLUDED.themes,
          timezone = EXCLUDED.timezone,
+         city = EXCLUDED.city,
+         church = EXCLUDED.church,
          updated_at = NOW()`,
       [
         subscription.endpoint,
@@ -291,7 +301,9 @@ app.post("/subscribe", async (req, res) => {
         subscription.keys.auth,
         String(userSeed),
         JSON.stringify(normalizedThemes),
-        tz
+        tz,
+        normalizedCity,
+        normalizedChurch
       ]
     );
     return res.json({ ok: true });
@@ -384,6 +396,74 @@ app.post("/send-test", async (req, res) => {
     const results = [];
     const title = "Aviso";
     const body = "Este Domingo Tenemos un encuentro con Dios en HDR";
+    for (const row of rows) {
+      const payload = JSON.stringify({
+        title,
+        body,
+        url: APP_URL
+      });
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: row.endpoint,
+            keys: {
+              p256dh: row.p256dh,
+              auth: row.auth
+            }
+          },
+          payload
+        );
+        results.push({ id: row.id, ok: true });
+      } catch (err) {
+        const status = err.statusCode || err.status || 0;
+        if (status === 404 || status === 410) {
+          await client.query("DELETE FROM push_subscriptions WHERE id = $1", [row.id]);
+        }
+        results.push({
+          id: row.id,
+          ok: false,
+          status,
+          message: err && err.message ? err.message : String(err)
+        });
+      }
+    }
+    const okCount = results.filter((r) => r.ok).length;
+    const failCount = results.length - okCount;
+    return res.json({ ok: true, count: results.length, okCount, failCount, results });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/send-segment", async (req, res) => {
+  if (CRON_SECRET && req.headers["x-cron-secret"] !== CRON_SECRET) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  const city = req.body && typeof req.body.city === "string" ? req.body.city.trim() : "";
+  const church = req.body && typeof req.body.church === "string" ? req.body.church.trim() : "";
+  const title = req.body && typeof req.body.title === "string" && req.body.title.trim()
+    ? req.body.title.trim()
+    : "Aviso";
+  const body = req.body && typeof req.body.body === "string" && req.body.body.trim()
+    ? req.body.body.trim()
+    : "Mensaje";
+  const client = await pool.connect();
+  try {
+    const clauses = [];
+    const params = [];
+    if (city) {
+      params.push(city.toLowerCase());
+      clauses.push(`LOWER(city) = $${params.length}`);
+    }
+    if (church) {
+      params.push(church.toLowerCase());
+      clauses.push(`LOWER(church) = $${params.length}`);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const query = `SELECT * FROM push_subscriptions ${where}`;
+    const { rows } = await client.query(query, params);
+    if (!rows.length) return res.json({ ok: true, count: 0, okCount: 0, failCount: 0, results: [] });
+    const results = [];
     for (const row of rows) {
       const payload = JSON.stringify({
         title,
