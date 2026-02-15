@@ -1,0 +1,14 @@
+{
+  "name": "readbible",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ReadBible PWA",
+  "scripts": {
+    "test": "vitest run --exclude tests/e2e/**",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "vitest": "^1.6.0"
+  }
+}
