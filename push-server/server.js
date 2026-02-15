@@ -423,6 +423,10 @@ app.post("/send-test", async (req, res) => {
   }
 });
 
+app.get("/", (req, res) => {
+  res.status(200).send("ok");
+});
+
 app.get("/healthz", (req, res) => {
   res.json({ ok: true });
 });
