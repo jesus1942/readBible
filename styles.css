@@ -533,6 +533,48 @@ button {
   text-align: left;
 }
 
+.side-menu-about button {
+  width: 100%;
+  text-align: left;
+}
+
+.side-menu-about .about-text,
+.side-menu-about .about-version {
+  word-break: break-word;
+}
+
+.sheet-card {
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+@media (max-width: 600px) {
+  .side-menu-panel {
+    width: 100%;
+    max-width: 100%;
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .side-menu-about {
+    padding: 10px;
+    gap: 6px;
+  }
+
+  .theme-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .community-summary {
+    font-size: 13px;
+  }
+
+  .sheet-card {
+    width: 100%;
+    border-radius: 16px;
+  }
+}
+
 .theme-grid {
   display: grid;
   gap: 8px;
