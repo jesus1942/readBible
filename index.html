@@ -167,18 +167,7 @@
           <button id="pushResubscribe" class="ghost">Reintentar suscripcion</button>
           <p id="pushDebug" class="about-text push-debug"></p>
         </div>
-        <div class="side-menu-about">
-          <p class="eyebrow">Comunidad</p>
-          <div id="communitySummary" class="community-summary" hidden></div>
-          <div id="communityForm">
-            <label for="communityCity">Ciudad</label>
-            <input id="communityCity" type="text" placeholder="Ej: Puerto Madryn" />
-            <label for="communityChurch">Iglesia</label>
-            <input id="communityChurch" type="text" placeholder="Ej: HDR" />
-            <button id="communitySave" class="ghost">Guardar comunidad</button>
-          </div>
-          <button id="communityEdit" class="ghost" hidden>Editar comunidad</button>
-        </div>
+        <button id="communityOpen" class="ghost">Configurar comunidad</button>
         <div class="side-menu-about">
           <p class="eyebrow">Acerca de</p>
           <p class="about-text">BibleApp, lectura biblica sin distracciones.</p>
@@ -202,6 +191,24 @@
           <li>Manten presionado el resultado para notas de estudio.</li>
         </ol>
         <button id="helpClose">Entendido</button>
+      </div>
+    </div>
+
+    <div id="communityOverlay" class="sheet-overlay center" hidden>
+      <div class="sheet-card">
+        <div class="side-menu-header">
+          <p class="eyebrow">Comunidad</p>
+          <button id="communityClose" class="menu-close" aria-label="Cerrar">✕</button>
+        </div>
+        <div id="communitySummary" class="community-summary" hidden></div>
+        <div id="communityForm">
+          <label for="communityCity">Ciudad</label>
+          <input id="communityCity" type="text" placeholder="Ej: Puerto Madryn" />
+          <label for="communityChurch">Iglesia</label>
+          <input id="communityChurch" type="text" placeholder="Ej: HDR" />
+          <button id="communitySave" class="ghost">Guardar comunidad</button>
+        </div>
+        <button id="communityEdit" class="ghost" hidden>Editar comunidad</button>
       </div>
     </div>
 
@@ -240,7 +247,7 @@
     ></script>
     <script src="core.js?v=2"></script>
     <script src="net.js?v=1"></script>
-    <script src="app.js?v=71"></script>
+    <script src="app.js?v=72"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;

@@ -125,6 +125,9 @@ const communitySave = document.getElementById("communitySave");
 const communitySummary = document.getElementById("communitySummary");
 const communityForm = document.getElementById("communityForm");
 const communityEdit = document.getElementById("communityEdit");
+const communityOpen = document.getElementById("communityOpen");
+const communityOverlay = document.getElementById("communityOverlay");
+const communityClose = document.getElementById("communityClose");
 const pickerBtn = document.getElementById("pickerBtn");
 const pickerOverlay = document.getElementById("pickerOverlay");
 const pickerClose = document.getElementById("pickerClose");
@@ -2103,6 +2106,17 @@ addListener(communityEdit, "click", () => {
   if (communitySummary) communitySummary.hidden = true;
   if (communityCity) communityCity.value = info.city || "";
   if (communityChurch) communityChurch.value = info.church || "";
+});
+addListener(communityOpen, "click", () => {
+  const info = readCommunityInfo();
+  updateCommunityUi(info);
+  if (communityOverlay) communityOverlay.hidden = false;
+});
+addListener(communityClose, "click", () => {
+  if (communityOverlay) communityOverlay.hidden = true;
+});
+addListener(communityOverlay, "click", (event) => {
+  if (event.target === communityOverlay) communityOverlay.hidden = true;
 });
 addListener(bigUiToggle, "change", () => {
   const enabled = !!bigUiToggle && bigUiToggle.checked;
