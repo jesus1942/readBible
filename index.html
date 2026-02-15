@@ -132,7 +132,11 @@
           <p class="eyebrow">Menu</p>
           <button id="menuClose" class="menu-close" aria-label="Cerrar menu">✕</button>
         </div>
-        <button id="helpOpen" class="ghost">Ayuda guiada</button>
+        <div class="side-menu-about">
+          <p class="eyebrow">Acciones</p>
+          <button id="helpOpen" class="ghost">Ayuda guiada</button>
+          <button id="communityOpen" class="ghost">Configurar comunidad</button>
+        </div>
         <div class="side-menu-about">
           <p class="eyebrow">Notas</p>
           <p id="notesEmpty" class="about-text">Todavia no hay notas guardadas.</p>
@@ -167,7 +171,6 @@
           <button id="pushResubscribe" class="ghost">Reintentar suscripcion</button>
           <p id="pushDebug" class="about-text push-debug"></p>
         </div>
-        <button id="communityOpen" class="ghost">Configurar comunidad</button>
         <div class="side-menu-about">
           <p class="eyebrow">Acerca de</p>
           <p class="about-text">BibleApp, lectura biblica sin distracciones.</p>
@@ -247,7 +250,7 @@
     ></script>
     <script src="core.js?v=2"></script>
     <script src="net.js?v=1"></script>
-    <script src="app.js?v=72"></script>
+    <script src="app.js?v=73"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;

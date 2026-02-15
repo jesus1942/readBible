@@ -528,6 +528,11 @@ button {
   gap: 6px;
 }
 
+.side-menu-panel .ghost {
+  width: 100%;
+  text-align: left;
+}
+
 .theme-grid {
   display: grid;
   gap: 8px;
