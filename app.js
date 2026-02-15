@@ -122,6 +122,9 @@ const pushResubscribe = document.getElementById("pushResubscribe");
 const communityCity = document.getElementById("communityCity");
 const communityChurch = document.getElementById("communityChurch");
 const communitySave = document.getElementById("communitySave");
+const communitySummary = document.getElementById("communitySummary");
+const communityForm = document.getElementById("communityForm");
+const communityEdit = document.getElementById("communityEdit");
 const pickerBtn = document.getElementById("pickerBtn");
 const pickerOverlay = document.getElementById("pickerOverlay");
 const pickerClose = document.getElementById("pickerClose");
@@ -210,6 +213,23 @@ function writeCommunityInfo(info) {
   } catch {
     // ignore
   }
+}
+
+function updateCommunityUi(info) {
+  const city = info.city ? info.city.trim() : "";
+  const church = info.church ? info.church.trim() : "";
+  const hasData = Boolean(city || church);
+  if (communitySummary) {
+    const parts = [];
+    if (city) parts.push(city);
+    if (church) parts.push(church);
+    communitySummary.textContent = hasData ? `Comunidad actual: ${parts.join(" · ")}` : "";
+    communitySummary.hidden = !hasData;
+  }
+  if (communityForm) communityForm.hidden = hasData;
+  if (communityEdit) communityEdit.hidden = !hasData;
+  if (communityCity) communityCity.value = city;
+  if (communityChurch) communityChurch.value = church;
 }
 
 function applyBigUi(enabled) {
@@ -2069,10 +2089,20 @@ addListener(pushResubscribe, "click", () => {
 addListener(communitySave, "click", () => {
   const city = communityCity ? communityCity.value.trim() : "";
   const church = communityChurch ? communityChurch.value.trim() : "";
-  writeCommunityInfo({ city, church });
+  const info = { city, church };
+  writeCommunityInfo(info);
+  updateCommunityUi(info);
   updatePushPreferences().catch(() => {
     // ignore
   });
+});
+addListener(communityEdit, "click", () => {
+  const info = readCommunityInfo();
+  if (communityForm) communityForm.hidden = false;
+  if (communityEdit) communityEdit.hidden = true;
+  if (communitySummary) communitySummary.hidden = true;
+  if (communityCity) communityCity.value = info.city || "";
+  if (communityChurch) communityChurch.value = info.church || "";
 });
 addListener(bigUiToggle, "change", () => {
   const enabled = !!bigUiToggle && bigUiToggle.checked;
@@ -2187,8 +2217,7 @@ refreshPushStatus().catch(() => {
 restoreLastQuery();
 initSplash();
 const communityInfo = readCommunityInfo();
-if (communityCity) communityCity.value = communityInfo.city;
-if (communityChurch) communityChurch.value = communityInfo.church;
+updateCommunityUi(communityInfo);
 
 function initSplash() {
   splash.hidden = false;

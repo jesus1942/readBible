@@ -910,6 +910,16 @@ button {
   font-size: 14px;
 }
 
+.community-summary {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(26, 18, 12, 0.06);
+  color: #3b2c19;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .ui-large {
   font-size: 1.08em;
 }
