@@ -382,11 +382,9 @@ app.post("/send-test", async (req, res) => {
       : await client.query("SELECT * FROM push_subscriptions");
     if (!rows.length) return res.json({ ok: true, count: 0 });
     const results = [];
+    const title = "Aviso";
+    const body = "Este Domingo Tenemos un encuentro con Dios en HDR";
     for (const row of rows) {
-      const reference = getDailyReference(row.user_seed, row.themes || [], row.timezone || "UTC");
-      const verseText = await fetchVerseText(reference, DAILY_VERSION);
-      const title = "Versículo de prueba";
-      const body = verseText ? `${verseText} — ${reference} (${DAILY_VERSION})` : `Prueba: ${reference} (${DAILY_VERSION})`;
       const payload = JSON.stringify({
         title,
         body,
