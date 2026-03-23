@@ -624,6 +624,10 @@ button {
   color: #7a5a2d;
 }
 
+#updateStatus {
+  white-space: pre-line;
+}
+
 .help-overlay {
   position: fixed;
   inset: 0;

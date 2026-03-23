@@ -8,6 +8,7 @@ const CACHE_TTL_MS = 1000 * 60 * 60 * 24;
 const DAILY_VERSION = "RVR1960";
 const RECENT_LIMIT = 5;
 const BOOKMARKS_KEY = "bookmarks";
+const APP_VERSION = "v1.1.0";
 const OLD_TESTAMENT_BOOKS = [
   "Génesis", "Éxodo", "Levítico", "Números", "Deuteronomio",
   "Josué", "Jueces", "Rut", "1 Samuel", "2 Samuel", "1 Reyes", "2 Reyes",
@@ -123,6 +124,9 @@ const pushToggle = document.getElementById("pushToggle");
 const pushStatus = document.getElementById("pushStatus");
 const pushDebug = document.getElementById("pushDebug");
 const pushResubscribe = document.getElementById("pushResubscribe");
+const updateStatus = document.getElementById("updateStatus");
+const updateReload = document.getElementById("updateReload");
+const appVersionText = document.getElementById("appVersionText");
 const communityCity = document.getElementById("communityCity");
 const communityChurch = document.getElementById("communityChurch");
 const communitySave = document.getElementById("communitySave");
@@ -188,6 +192,8 @@ let textSuggestResults = [];
 let textSuggestController = null;
 let userSeed = null;
 let deferredInstallPrompt = null;
+let pendingServiceWorker = null;
+let appReloading = false;
 let pickerState = {
   bookIndex: 0,
   chapter: 1,
@@ -342,6 +348,87 @@ async function refreshPushStatus() {
     `Servidor: ${getPushServerUrl()}`,
     `Suscripcion: ${sub ? "activa" : "ninguna"}`
   ]);
+}
+
+function setUpdateStatus(text, showReload) {
+  if (updateStatus) updateStatus.textContent = text;
+  if (updateReload) updateReload.hidden = !showReload;
+}
+
+function refreshVersionUi() {
+  if (!appVersionText) return;
+  appVersionText.textContent = `Version ${APP_VERSION}`;
+}
+
+function watchInstallingWorker(worker) {
+  if (!worker) return;
+  worker.addEventListener("statechange", () => {
+    if (worker.state === "installed" && navigator.serviceWorker.controller) {
+      pendingServiceWorker = worker;
+      setUpdateStatus("Hay una nueva version disponible.", true);
+    }
+  });
+}
+
+async function refreshAppUpdateStatus() {
+  refreshVersionUi();
+  if (!("serviceWorker" in navigator)) {
+    setUpdateStatus("Actualizaciones automaticas no disponibles en este navegador.", false);
+    return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) {
+      setUpdateStatus("Service worker todavia no registrado.", false);
+      return;
+    }
+    if (reg.waiting) {
+      pendingServiceWorker = reg.waiting;
+      setUpdateStatus("Hay una nueva version disponible.", true);
+      return;
+    }
+    if (reg.installing) {
+      watchInstallingWorker(reg.installing);
+      setUpdateStatus("Descargando nueva version...", false);
+      return;
+    }
+    setUpdateStatus("App actualizada.", false);
+  } catch {
+    setUpdateStatus("No se pudo verificar el estado de actualizacion.", false);
+  }
+}
+
+function initAppUpdateHandling() {
+  refreshVersionUi();
+  if (!("serviceWorker" in navigator)) {
+    setUpdateStatus("Actualizaciones automaticas no disponibles en este navegador.", false);
+    return;
+  }
+  navigator.serviceWorker.getRegistration().then((reg) => {
+    if (!reg) {
+      setUpdateStatus("Esperando registro de la app...", false);
+      return;
+    }
+    if (reg.installing) watchInstallingWorker(reg.installing);
+    reg.addEventListener("updatefound", () => {
+      if (reg.installing) {
+        setUpdateStatus("Descargando nueva version...", false);
+        watchInstallingWorker(reg.installing);
+      }
+    });
+    refreshAppUpdateStatus().catch(() => {
+      // ignore
+    });
+  }).catch(() => {
+    setUpdateStatus("No se pudo iniciar el sistema de actualizaciones.", false);
+  });
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (appReloading) return;
+    appReloading = true;
+    setUpdateStatus("Aplicando nueva version...", false);
+    window.location.reload();
+  });
 }
 
 async function subscribeToPush() {
@@ -2268,6 +2355,10 @@ addListener(notesList, "click", (event) => {
   openNoteFromIndex(key);
 });
 addListener(bookmarkBtn, "click", toggleCurrentBookmark);
+addListener(updateReload, "click", () => {
+  setUpdateStatus("Recargando app...", false);
+  window.location.reload();
+});
 addListener(bookmarksList, "click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
@@ -2366,6 +2457,7 @@ if (themeCheckboxes.length) {
 }
 
 initVersions();
+initAppUpdateHandling();
 refreshPushStatus().catch(() => {
   // ignore
 });
@@ -2874,6 +2966,9 @@ function openMenu() {
   if (!sideMenu) return;
   renderBookmarksIndex();
   renderNotesIndex();
+  refreshAppUpdateStatus().catch(() => {
+    // ignore
+  });
   refreshPushStatus().catch(() => {
     // ignore
   });
