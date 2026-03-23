@@ -132,16 +132,6 @@ const communityEdit = document.getElementById("communityEdit");
 const communityOpen = document.getElementById("communityOpen");
 const communityOverlay = document.getElementById("communityOverlay");
 const communityClose = document.getElementById("communityClose");
-const devotionalTitle = document.getElementById("devotionalTitle");
-const devotionalExcerpt = document.getElementById("devotionalExcerpt");
-const devotionalOpen = document.getElementById("devotionalOpen");
-const devotionalOverlay = document.getElementById("devotionalOverlay");
-const devotionalClose = document.getElementById("devotionalClose");
-const devotionalOverlayTitle = document.getElementById("devotionalOverlayTitle");
-const devotionalOverlayVerse = document.getElementById("devotionalOverlayVerse");
-const devotionalOverlayBody = document.getElementById("devotionalOverlayBody");
-const devotionalOverlayPrayer = document.getElementById("devotionalOverlayPrayer");
-const devotionalOverlayAction = document.getElementById("devotionalOverlayAction");
 const pickerBtn = document.getElementById("pickerBtn");
 const pickerOverlay = document.getElementById("pickerOverlay");
 const pickerClose = document.getElementById("pickerClose");
@@ -198,7 +188,6 @@ let textSuggestResults = [];
 let textSuggestController = null;
 let userSeed = null;
 let deferredInstallPrompt = null;
-let currentDevotional = null;
 let pickerState = {
   bookIndex: 0,
   chapter: 1,
@@ -1640,38 +1629,6 @@ function openNoteFromIndex(key) {
   fetchVerse();
 }
 
-async function prepareDevotional() {
-  try {
-    const items = await fetchJson("devotionals.json");
-    if (!Array.isArray(items) || !items.length) return;
-    currentDevotional = items[dayOfYearIndex() % items.length];
-    renderDevotionalPreview();
-  } catch {
-    // ignore
-  }
-}
-
-function renderDevotionalPreview() {
-  if (!currentDevotional) return;
-  if (devotionalTitle) devotionalTitle.textContent = currentDevotional.title || "Devocional del dia";
-  if (devotionalExcerpt) devotionalExcerpt.textContent = currentDevotional.excerpt || "";
-}
-
-function openDevotional() {
-  if (!currentDevotional || !devotionalOverlay) return;
-  if (devotionalOverlayTitle) devotionalOverlayTitle.textContent = currentDevotional.title || "";
-  if (devotionalOverlayVerse) devotionalOverlayVerse.textContent = currentDevotional.reference ? `— ${currentDevotional.reference}` : "";
-  if (devotionalOverlayBody) devotionalOverlayBody.textContent = currentDevotional.body || "";
-  if (devotionalOverlayPrayer) devotionalOverlayPrayer.textContent = currentDevotional.prayer ? `Oracion: ${currentDevotional.prayer}` : "";
-  if (devotionalOverlayAction) devotionalOverlayAction.textContent = currentDevotional.action ? `Practica: ${currentDevotional.action}` : "";
-  devotionalOverlay.hidden = false;
-}
-
-function closeDevotional() {
-  if (!devotionalOverlay) return;
-  devotionalOverlay.hidden = true;
-}
-
 function normalizeStudyData(data) {
   if (!data || typeof data !== "object") {
     return { notes: [], sermonDate: null };
@@ -2320,11 +2277,6 @@ addListener(bookmarksList, "click", (event) => {
   if (!id) return;
   openBookmark(id);
 });
-addListener(devotionalOpen, "click", openDevotional);
-addListener(devotionalClose, "click", closeDevotional);
-addListener(devotionalOverlay, "click", (event) => {
-  if (event.target === devotionalOverlay) closeDevotional();
-});
 addListener(installButton, "click", async () => {
   if (!deferredInstallPrompt) return;
   deferredInstallPrompt.prompt();
@@ -2418,9 +2370,6 @@ refreshPushStatus().catch(() => {
   // ignore
 });
 restoreLastQuery();
-prepareDevotional().catch(() => {
-  // ignore
-});
 initSplash();
 const communityInfo = readCommunityInfo();
 updateCommunityUi(communityInfo);
@@ -2925,7 +2874,6 @@ function openMenu() {
   if (!sideMenu) return;
   renderBookmarksIndex();
   renderNotesIndex();
-  renderDevotionalPreview();
   refreshPushStatus().catch(() => {
     // ignore
   });

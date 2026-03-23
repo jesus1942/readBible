@@ -149,12 +149,6 @@
           <div id="notesList" class="notes-list"></div>
         </div>
         <div class="side-menu-about">
-          <p class="eyebrow">Devocional</p>
-          <p id="devotionalTitle" class="about-text"></p>
-          <p id="devotionalExcerpt" class="about-text"></p>
-          <button id="devotionalOpen" class="ghost">Abrir devocional</button>
-        </div>
-        <div class="side-menu-about">
           <p class="eyebrow">Versiculo diario</p>
           <p class="about-text">Elige temas para personalizar.</p>
           <div class="theme-grid">
@@ -227,20 +221,6 @@
       </div>
     </div>
 
-    <div id="devotionalOverlay" class="sheet-overlay center" hidden>
-      <div class="sheet-card devotional-card">
-        <div class="side-menu-header">
-          <p class="eyebrow">Devocional del dia</p>
-          <button id="devotionalClose" class="menu-close" aria-label="Cerrar">✕</button>
-        </div>
-        <p id="devotionalOverlayTitle" class="devotional-title"></p>
-        <p id="devotionalOverlayVerse" class="devotional-verse"></p>
-        <p id="devotionalOverlayBody" class="about-text"></p>
-        <p id="devotionalOverlayPrayer" class="about-text"></p>
-        <p id="devotionalOverlayAction" class="about-text"></p>
-      </div>
-    </div>
-
     <div id="pickerOverlay" class="picker-overlay" hidden>
       <div class="picker-panel" role="dialog" aria-label="Seleccionar referencia">
         <div class="picker-header">
@@ -276,7 +256,7 @@
     ></script>
     <script src="core.js?v=2"></script>
     <script src="net.js?v=2"></script>
-    <script src="app.js?v=75"></script>
+    <script src="app.js?v=76"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;

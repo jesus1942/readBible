@@ -788,23 +788,6 @@ button {
   margin-top: 4px;
 }
 
-.devotional-title {
-  margin: 0;
-  font-size: 24px;
-  line-height: 1.2;
-  color: #3b2c19;
-}
-
-.devotional-verse {
-  margin: 0;
-  color: var(--accent);
-  font-style: italic;
-}
-
-.devotional-card {
-  gap: 14px;
-}
-
 .push-debug {
   margin-top: 8px;
   font-size: 12px;
