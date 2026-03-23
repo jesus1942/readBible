@@ -4,7 +4,7 @@ Una Progressive Web App (PWA) minimalista para leer la Biblia, diseñada para un
 
 ## Características
 
-*   **Lectura Zen**: Modo de lectura sin distracciones.
+*   **Lectura sin distracciones**: Modo de lectura sin distracciones.
 *   **Búsqueda Rápida**: Busca por libro, capítulo y versículo.
 *   **Múltiples Versiones**: Soporte para RVR1960, NVI, LBLA, y más.
 *   **Offline First**: Funciona sin conexión una vez cargada (gracias al Service Worker).
