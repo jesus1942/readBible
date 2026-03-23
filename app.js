@@ -7,6 +7,7 @@ const versions = [
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24;
 const DAILY_VERSION = "RVR1960";
 const RECENT_LIMIT = 5;
+const BOOKMARKS_KEY = "bookmarks";
 const OLD_TESTAMENT_BOOKS = [
   "Génesis", "Éxodo", "Levítico", "Números", "Deuteronomio",
   "Josué", "Jueces", "Rut", "1 Samuel", "2 Samuel", "1 Reyes", "2 Reyes",
@@ -84,6 +85,7 @@ const statusEl = document.getElementById("status");
 const resultEl = document.getElementById("result");
 const verseEl = document.getElementById("verseText");
 const refEl = document.getElementById("reference");
+const bookmarkBtn = document.getElementById("bookmarkBtn");
 const querySuggestions = document.getElementById("querySuggestions");
 const studyDot = document.getElementById("studyDot");
 const studyActions = document.getElementById("studyActions");
@@ -112,6 +114,8 @@ const highlightBtn = document.getElementById("highlightBtn");
 const themeCheckboxes = Array.from(document.querySelectorAll(".theme-chip input"));
 const themesSave = document.getElementById("themesSave");
 const installButton = document.getElementById("installButton");
+const bookmarksList = document.getElementById("bookmarksList");
+const bookmarksEmpty = document.getElementById("bookmarksEmpty");
 const notesList = document.getElementById("notesList");
 const notesEmpty = document.getElementById("notesEmpty");
 const bigUiToggle = document.getElementById("bigUiToggle");
@@ -128,6 +132,16 @@ const communityEdit = document.getElementById("communityEdit");
 const communityOpen = document.getElementById("communityOpen");
 const communityOverlay = document.getElementById("communityOverlay");
 const communityClose = document.getElementById("communityClose");
+const devotionalTitle = document.getElementById("devotionalTitle");
+const devotionalExcerpt = document.getElementById("devotionalExcerpt");
+const devotionalOpen = document.getElementById("devotionalOpen");
+const devotionalOverlay = document.getElementById("devotionalOverlay");
+const devotionalClose = document.getElementById("devotionalClose");
+const devotionalOverlayTitle = document.getElementById("devotionalOverlayTitle");
+const devotionalOverlayVerse = document.getElementById("devotionalOverlayVerse");
+const devotionalOverlayBody = document.getElementById("devotionalOverlayBody");
+const devotionalOverlayPrayer = document.getElementById("devotionalOverlayPrayer");
+const devotionalOverlayAction = document.getElementById("devotionalOverlayAction");
 const pickerBtn = document.getElementById("pickerBtn");
 const pickerOverlay = document.getElementById("pickerOverlay");
 const pickerClose = document.getElementById("pickerClose");
@@ -165,6 +179,9 @@ let studyPressActive = false;
 let activeStudyNoteId = null;
 let currentResultKey = null;
 let currentResultText = "";
+let currentResultMode = "verse";
+let currentResultVersion = "";
+let currentResultReference = "";
 let activeHighlightRange = null;
 let activeHighlightContainer = null;
 let lastTapAt = 0;
@@ -181,6 +198,7 @@ let textSuggestResults = [];
 let textSuggestController = null;
 let userSeed = null;
 let deferredInstallPrompt = null;
+let currentDevotional = null;
 let pickerState = {
   bookIndex: 0,
   chapter: 1,
@@ -945,6 +963,8 @@ async function fetchVerse() {
   const version = versionSelect.value;
   currentStudyParsed = parsed;
   currentStudyVersion = version;
+  currentResultMode = "verse";
+  currentResultVersion = version;
   currentResultKey = buildCacheKey(parsed, version);
   trackEvent("search_verse", { version, query: queryInput.value.trim() });
   const verseQuery = parsed.verseEnd > parsed.verseStart
@@ -998,6 +1018,8 @@ async function fetchChapter() {
   const version = versionSelect.value;
   currentStudyParsed = parsed;
   currentStudyVersion = version;
+  currentResultMode = "chapter";
+  currentResultVersion = version;
   currentResultKey = buildChapterCacheKey(parsed, version);
   trackEvent("search_chapter", { version, query: queryInput.value.trim() });
   const bookQuery = formatBookDisplay(parsed.book);
@@ -1070,20 +1092,24 @@ function showStatus(text, isError) {
   resultEl.hidden = true;
   statusEl.textContent = text;
   statusEl.style.color = isError ? "#ff7b7b" : "var(--muted)";
+  if (bookmarkBtn) bookmarkBtn.hidden = true;
 }
 
 function showResult(text, reference) {
   statusEl.textContent = "";
   currentResultText = text;
+  currentResultReference = reference;
   updateHighlightedViews();
   refEl.textContent = `— ${reference}`;
   resultEl.hidden = false;
+  if (bookmarkBtn) bookmarkBtn.hidden = false;
   if (isZenOpen) {
     updateHighlightedViews();
     zenRef.textContent = `— ${reference}`;
   }
   persistLastQuery();
   refreshStudyDot();
+  refreshBookmarkButton();
 }
 
 function goPrev() {
@@ -1115,6 +1141,122 @@ function persistLastQuery() {
     // ignore storage errors
   }
   saveRecentQuery(payload.query);
+}
+
+function buildBookmarkId(query, version, mode) {
+  return `${mode}:${query}:${version}`;
+}
+
+function readBookmarks() {
+  try {
+    const raw = localStorage.getItem(BOOKMARKS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item && typeof item === "object")
+      .map((item) => ({
+        id: String(item.id || buildBookmarkId(item.query || "", item.version || "", item.mode || "verse")),
+        query: String(item.query || "").trim(),
+        version: String(item.version || DAILY_VERSION).trim(),
+        mode: item.mode === "chapter" ? "chapter" : "verse",
+        reference: String(item.reference || "").trim(),
+        preview: String(item.preview || "").trim(),
+        updatedAt: typeof item.updatedAt === "number" ? item.updatedAt : Date.now()
+      }))
+      .filter((item) => item.query && item.reference);
+  } catch {
+    return [];
+  }
+}
+
+function writeBookmarks(items) {
+  try {
+    localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(items));
+  } catch {
+    // ignore
+  }
+}
+
+function currentBookmarkEntry() {
+  if (resultEl.hidden) return null;
+  const query = queryInput.value.trim();
+  const version = currentResultVersion || versionSelect.value;
+  if (!query || !version || !currentResultReference) return null;
+  return {
+    id: buildBookmarkId(query, version, currentResultMode),
+    query,
+    version,
+    mode: currentResultMode,
+    reference: currentResultReference,
+    preview: currentResultText
+      ? `${currentResultText.slice(0, 110).trim()}${currentResultText.length > 110 ? "..." : ""}`
+      : "",
+    updatedAt: Date.now()
+  };
+}
+
+function isCurrentBookmarked() {
+  const entry = currentBookmarkEntry();
+  if (!entry) return false;
+  return readBookmarks().some((item) => item.id === entry.id);
+}
+
+function refreshBookmarkButton() {
+  if (!bookmarkBtn) return;
+  const active = isCurrentBookmarked();
+  bookmarkBtn.classList.toggle("active", active);
+  bookmarkBtn.setAttribute("aria-label", active ? "Quitar marcador" : "Guardar marcador");
+  bookmarkBtn.title = active ? "Quitar marcador" : "Guardar marcador";
+}
+
+function toggleCurrentBookmark() {
+  const entry = currentBookmarkEntry();
+  if (!entry) return;
+  const bookmarks = readBookmarks();
+  const idx = bookmarks.findIndex((item) => item.id === entry.id);
+  if (idx >= 0) {
+    bookmarks.splice(idx, 1);
+  } else {
+    bookmarks.unshift(entry);
+  }
+  writeBookmarks(bookmarks.slice(0, 40));
+  refreshBookmarkButton();
+  renderBookmarksIndex();
+}
+
+function renderBookmarksIndex() {
+  if (!bookmarksList || !bookmarksEmpty) return;
+  const entries = readBookmarks().sort((a, b) => b.updatedAt - a.updatedAt);
+  bookmarksList.innerHTML = "";
+  bookmarksEmpty.hidden = entries.length > 0;
+  entries.forEach((entry) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "note-link bookmark-link";
+    button.dataset.bookmarkId = entry.id;
+    button.textContent = entry.reference;
+    const meta = document.createElement("small");
+    const modeLabel = entry.mode === "chapter" ? "Capitulo" : "Versiculo";
+    meta.textContent = entry.preview ? `${modeLabel} · ${entry.preview}` : modeLabel;
+    button.appendChild(meta);
+    bookmarksList.appendChild(button);
+  });
+}
+
+function openBookmark(id) {
+  const bookmark = readBookmarks().find((item) => item.id === id);
+  if (!bookmark) return;
+  queryInput.value = bookmark.query;
+  if (versions.includes(bookmark.version)) {
+    versionSelect.value = bookmark.version;
+  }
+  closeMenu();
+  if (bookmark.mode === "chapter") {
+    fetchChapter();
+    return;
+  }
+  fetchVerse();
 }
 
 function restoreLastQuery() {
@@ -1496,6 +1638,38 @@ function openNoteFromIndex(key) {
   }
   closeMenu();
   fetchVerse();
+}
+
+async function prepareDevotional() {
+  try {
+    const items = await fetchJson("devotionals.json");
+    if (!Array.isArray(items) || !items.length) return;
+    currentDevotional = items[dayOfYearIndex() % items.length];
+    renderDevotionalPreview();
+  } catch {
+    // ignore
+  }
+}
+
+function renderDevotionalPreview() {
+  if (!currentDevotional) return;
+  if (devotionalTitle) devotionalTitle.textContent = currentDevotional.title || "Devocional del dia";
+  if (devotionalExcerpt) devotionalExcerpt.textContent = currentDevotional.excerpt || "";
+}
+
+function openDevotional() {
+  if (!currentDevotional || !devotionalOverlay) return;
+  if (devotionalOverlayTitle) devotionalOverlayTitle.textContent = currentDevotional.title || "";
+  if (devotionalOverlayVerse) devotionalOverlayVerse.textContent = currentDevotional.reference ? `— ${currentDevotional.reference}` : "";
+  if (devotionalOverlayBody) devotionalOverlayBody.textContent = currentDevotional.body || "";
+  if (devotionalOverlayPrayer) devotionalOverlayPrayer.textContent = currentDevotional.prayer ? `Oracion: ${currentDevotional.prayer}` : "";
+  if (devotionalOverlayAction) devotionalOverlayAction.textContent = currentDevotional.action ? `Practica: ${currentDevotional.action}` : "";
+  devotionalOverlay.hidden = false;
+}
+
+function closeDevotional() {
+  if (!devotionalOverlay) return;
+  devotionalOverlay.hidden = true;
 }
 
 function normalizeStudyData(data) {
@@ -2136,6 +2310,21 @@ addListener(notesList, "click", (event) => {
   if (!key) return;
   openNoteFromIndex(key);
 });
+addListener(bookmarkBtn, "click", toggleCurrentBookmark);
+addListener(bookmarksList, "click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const button = target.closest(".bookmark-link");
+  if (!button) return;
+  const id = button.dataset.bookmarkId;
+  if (!id) return;
+  openBookmark(id);
+});
+addListener(devotionalOpen, "click", openDevotional);
+addListener(devotionalClose, "click", closeDevotional);
+addListener(devotionalOverlay, "click", (event) => {
+  if (event.target === devotionalOverlay) closeDevotional();
+});
 addListener(installButton, "click", async () => {
   if (!deferredInstallPrompt) return;
   deferredInstallPrompt.prompt();
@@ -2229,6 +2418,9 @@ refreshPushStatus().catch(() => {
   // ignore
 });
 restoreLastQuery();
+prepareDevotional().catch(() => {
+  // ignore
+});
 initSplash();
 const communityInfo = readCommunityInfo();
 updateCommunityUi(communityInfo);
@@ -2731,7 +2923,9 @@ function closeDailyVerse() {
 
 function openMenu() {
   if (!sideMenu) return;
+  renderBookmarksIndex();
   renderNotesIndex();
+  renderDevotionalPreview();
   refreshPushStatus().catch(() => {
     // ignore
   });

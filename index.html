@@ -47,6 +47,7 @@
           <p id="verseText" class="verse"></p>
           <p class="reference">
             <span id="reference"></span>
+            <button id="bookmarkBtn" class="bookmark-btn" type="button" aria-label="Guardar marcador" hidden>🔖</button>
             <button id="studyDot" class="study-dot" type="button" aria-label="Abrir estudio" hidden></button>
           </p>
         </div>
@@ -138,9 +139,20 @@
           <button id="communityOpen" class="ghost">Configurar comunidad</button>
         </div>
         <div class="side-menu-about">
+          <p class="eyebrow">Marcadores</p>
+          <p id="bookmarksEmpty" class="about-text">Todavia no guardaste marcadores.</p>
+          <div id="bookmarksList" class="notes-list"></div>
+        </div>
+        <div class="side-menu-about">
           <p class="eyebrow">Notas</p>
           <p id="notesEmpty" class="about-text">Todavia no hay notas guardadas.</p>
           <div id="notesList" class="notes-list"></div>
+        </div>
+        <div class="side-menu-about">
+          <p class="eyebrow">Devocional</p>
+          <p id="devotionalTitle" class="about-text"></p>
+          <p id="devotionalExcerpt" class="about-text"></p>
+          <button id="devotionalOpen" class="ghost">Abrir devocional</button>
         </div>
         <div class="side-menu-about">
           <p class="eyebrow">Versiculo diario</p>
@@ -215,6 +227,20 @@
       </div>
     </div>
 
+    <div id="devotionalOverlay" class="sheet-overlay center" hidden>
+      <div class="sheet-card devotional-card">
+        <div class="side-menu-header">
+          <p class="eyebrow">Devocional del dia</p>
+          <button id="devotionalClose" class="menu-close" aria-label="Cerrar">✕</button>
+        </div>
+        <p id="devotionalOverlayTitle" class="devotional-title"></p>
+        <p id="devotionalOverlayVerse" class="devotional-verse"></p>
+        <p id="devotionalOverlayBody" class="about-text"></p>
+        <p id="devotionalOverlayPrayer" class="about-text"></p>
+        <p id="devotionalOverlayAction" class="about-text"></p>
+      </div>
+    </div>
+
     <div id="pickerOverlay" class="picker-overlay" hidden>
       <div class="picker-panel" role="dialog" aria-label="Seleccionar referencia">
         <div class="picker-header">
@@ -250,7 +276,7 @@
     ></script>
     <script src="core.js?v=2"></script>
     <script src="net.js?v=2"></script>
-    <script src="app.js?v=74"></script>
+    <script src="app.js?v=75"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;

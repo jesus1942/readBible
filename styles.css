@@ -194,6 +194,22 @@ button {
   gap: 10px;
 }
 
+.bookmark-btn {
+  border: none;
+  background: transparent;
+  color: #c9901c;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.5;
+}
+
+.bookmark-btn.active {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
 .study-dot {
   width: 14px;
   height: 14px;
@@ -750,6 +766,43 @@ button {
   font-weight: 500;
   color: #8a6b44;
   margin-top: 4px;
+}
+
+.bookmark-link {
+  position: relative;
+  padding-left: 36px;
+}
+
+.bookmark-link::before {
+  content: "🔖";
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  font-size: 16px;
+}
+
+.bookmark-link small {
+  display: block;
+  font-weight: 500;
+  color: #8a6b44;
+  margin-top: 4px;
+}
+
+.devotional-title {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  color: #3b2c19;
+}
+
+.devotional-verse {
+  margin: 0;
+  color: var(--accent);
+  font-style: italic;
+}
+
+.devotional-card {
+  gap: 14px;
 }
 
 .push-debug {
