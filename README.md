@@ -21,7 +21,16 @@ Para ejecutar la aplicación localmente, necesitas Python 3 instalado.
     cd readBible
     ```
 
-2.  Inicia el servidor:
+2.  Inicia la app completa en local:
+    ```bash
+    ./start_local_stack.sh
+    ```
+    Esto levanta:
+    - la PWA en `http://<tu-ip>:8080`
+    - la API local en `http://127.0.0.1:3000`
+    - un proxy `/api/*` desde la PWA hacia la API, para probar desde otros dispositivos sin hardcodear puertos en frontend
+
+3.  Si solo quieres la PWA estática sin API:
     ```bash
     ./start_pwa_server.sh
     ```
@@ -30,7 +39,7 @@ Para ejecutar la aplicación localmente, necesitas Python 3 instalado.
     python3 server.py --port 8080
     ```
 
-3.  Abre tu navegador en `http://localhost:8080`.
+4.  Abre tu navegador en la URL que imprime el script. Si estás usando solo la PWA estática, abre `http://localhost:8080`.
 
 ## Estructura
 

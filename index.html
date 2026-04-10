@@ -54,7 +54,7 @@
       </section>
 
       <footer class="footer">
-        <span>Creada por Jesus Olguin.</span>
+        <span class="footer-credit">Creada por <a href="https://wa.me/5492804018359?text=Hola%20Jesus%2C%20gracias%20por%20la%20app" target="_blank" rel="noopener">Jesus Olguin</a>.</span>
         <div class="footer-actions">
           <a class="whatsapp-button" href="https://wa.me/5492804018359?text=Hola%20Jesus%2C%20gracias%20por%20la%20app" target="_blank" rel="noopener">Enviar saludo</a>
           <button id="installButton" class="install-button" type="button" hidden>Instalar app</button>
@@ -174,14 +174,8 @@
           <p class="eyebrow">Notificaciones</p>
           <p id="pushStatus" class="about-text">Notificaciones diarias apagadas.</p>
           <button id="pushToggle" class="ghost">Activar notificaciones diarias</button>
-          <button id="pushResubscribe" class="ghost">Reintentar suscripcion</button>
+          <button id="pushResubscribe" class="ghost">Recrear suscripcion</button>
           <p id="pushDebug" class="about-text push-debug"></p>
-        </div>
-        <div class="side-menu-about">
-          <p class="eyebrow">Actualizaciones</p>
-          <p id="updateStatus" class="about-text">Buscando estado de actualizacion...</p>
-          <button id="updateReload" class="ghost" hidden>Recargar ahora</button>
-          <p id="appVersionText" class="about-version">Version</p>
         </div>
         <div class="side-menu-about">
           <p class="eyebrow">Acerca de</p>
@@ -214,15 +208,92 @@
           <p class="eyebrow">Comunidad</p>
           <button id="communityClose" class="menu-close" aria-label="Cerrar">✕</button>
         </div>
+        <p class="community-note">Perfiles, sedes, eventos, solicitudes de rol y check-in.</p>
+        <p id="communityApiHint" class="community-api-hint"></p>
         <div id="communitySummary" class="community-summary" hidden></div>
-        <div id="communityForm">
+        <div id="communityStatus" class="community-status" hidden></div>
+
+        <div id="communityForm" class="community-section">
+          <p class="eyebrow">Perfil</p>
+          <label for="communityFullName">Nombre</label>
+          <input id="communityFullName" type="text" placeholder="Ej: Jesus Olguin" />
+          <label for="communityRole">Solicitar rol</label>
+          <select id="communityRole">
+            <option value="feligres">Feligres</option>
+            <option value="colaborador">Colaborador</option>
+            <option value="dirigente">Dirigente</option>
+          </select>
           <label for="communityCity">Ciudad</label>
           <input id="communityCity" type="text" placeholder="Ej: Puerto Madryn" />
           <label for="communityChurch">Iglesia</label>
           <input id="communityChurch" type="text" placeholder="Ej: HDR" />
-          <button id="communitySave" class="ghost">Guardar comunidad</button>
+          <button id="communitySave" class="ghost">Guardar perfil</button>
+          <button id="communityRequestRole" class="ghost" type="button">Solicitar elevacion</button>
         </div>
         <button id="communityEdit" class="ghost" hidden>Editar comunidad</button>
+
+        <div id="communityAdminSection" class="community-section" hidden>
+          <div class="community-section-head">
+            <p class="eyebrow">Moderacion</p>
+            <button id="communityRefreshRequests" class="ghost" type="button">Actualizar</button>
+          </div>
+          <p class="community-note">Las solicitudes pendientes se aprueban sobre el perfil real del solicitante.</p>
+          <div id="communityAdminCodeGroup">
+            <label for="communityAdminCode">Codigo admin local</label>
+            <input id="communityAdminCode" type="password" placeholder="Solo si no entraste como dirigente" />
+          </div>
+          <div id="communityRoleRequestsList" class="community-list"></div>
+          <button id="communityApproveRole" class="ghost" type="button" hidden>Aprobar solicitud seleccionada</button>
+        </div>
+
+        <div class="community-section">
+          <div class="community-section-head">
+            <p class="eyebrow">Sedes</p>
+            <button id="communityRefresh" class="ghost" type="button">Actualizar</button>
+          </div>
+          <div id="communityLocationsList" class="community-list"></div>
+        </div>
+
+        <div class="community-section">
+          <div class="community-section-head">
+            <p class="eyebrow">Mapa cercano</p>
+            <button id="communityUseMyLocation" class="ghost" type="button">Usar mi ubicacion</button>
+          </div>
+          <p id="communityMapStatus" class="community-note">Centra el mapa en una sede o usa tu ubicacion para ver congregaciones cercanas.</p>
+          <iframe
+            id="communityMapFrame"
+            class="community-map-frame"
+            title="Mapa de congregaciones"
+            loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade"
+          ></iframe>
+          <div id="communityNearbyActions" class="community-nearby-actions"></div>
+        </div>
+
+        <div id="communityLocationForm" class="community-section">
+          <p class="eyebrow">Nueva sede</p>
+          <label for="communityLocationName">Nombre</label>
+          <input id="communityLocationName" type="text" placeholder="Ej: HDR Centro" />
+          <label for="communityLocationAddress">Direccion</label>
+          <input id="communityLocationAddress" type="text" placeholder="Ej: Mitre 1200" />
+          <button id="communityCreateLocation" class="ghost" type="button">Crear sede</button>
+        </div>
+
+        <div id="communityEventForm" class="community-section">
+          <p class="eyebrow">Nuevo evento</p>
+          <label for="communityEventLocation">Sede</label>
+          <select id="communityEventLocation"></select>
+          <label for="communityEventTitle">Titulo</label>
+          <input id="communityEventTitle" type="text" placeholder="Ej: Reunion de jovenes" />
+          <label for="communityEventStartsAt">Fecha y hora</label>
+          <input id="communityEventStartsAt" type="datetime-local" />
+          <button id="communityCreateEvent" class="ghost" type="button">Crear evento</button>
+        </div>
+
+        <div class="community-section">
+          <p class="eyebrow">Eventos</p>
+          <div id="communityEventsList" class="community-list"></div>
+        </div>
       </div>
     </div>
 
@@ -261,7 +332,7 @@
     ></script>
     <script src="core.js?v=2"></script>
     <script src="net.js?v=2"></script>
-    <script src="app.js?v=77"></script>
+    <script src="app.js?v=79"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;

@@ -11,3 +11,7 @@ assets/readbible-icon-ascii-512.svg
 node_modules/
 playwright-report/
 test-results/
+.codex
+package-lock.json
+playwright.config.mjs
+tests/

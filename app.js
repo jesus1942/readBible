@@ -8,7 +8,6 @@ const CACHE_TTL_MS = 1000 * 60 * 60 * 24;
 const DAILY_VERSION = "RVR1960";
 const RECENT_LIMIT = 5;
 const BOOKMARKS_KEY = "bookmarks";
-const APP_VERSION = "v1.1.0";
 const OLD_TESTAMENT_BOOKS = [
   "Génesis", "Éxodo", "Levítico", "Números", "Deuteronomio",
   "Josué", "Jueces", "Rut", "1 Samuel", "2 Samuel", "1 Reyes", "2 Reyes",
@@ -124,18 +123,42 @@ const pushToggle = document.getElementById("pushToggle");
 const pushStatus = document.getElementById("pushStatus");
 const pushDebug = document.getElementById("pushDebug");
 const pushResubscribe = document.getElementById("pushResubscribe");
-const updateStatus = document.getElementById("updateStatus");
-const updateReload = document.getElementById("updateReload");
-const appVersionText = document.getElementById("appVersionText");
+const communityFullName = document.getElementById("communityFullName");
+const communityRole = document.getElementById("communityRole");
 const communityCity = document.getElementById("communityCity");
 const communityChurch = document.getElementById("communityChurch");
 const communitySave = document.getElementById("communitySave");
+const communityRequestRole = document.getElementById("communityRequestRole");
 const communitySummary = document.getElementById("communitySummary");
 const communityForm = document.getElementById("communityForm");
 const communityEdit = document.getElementById("communityEdit");
 const communityOpen = document.getElementById("communityOpen");
 const communityOverlay = document.getElementById("communityOverlay");
 const communityClose = document.getElementById("communityClose");
+const communityStatus = document.getElementById("communityStatus");
+const communityApiHint = document.getElementById("communityApiHint");
+const communityRefresh = document.getElementById("communityRefresh");
+const communityAdminSection = document.getElementById("communityAdminSection");
+const communityAdminCodeGroup = document.getElementById("communityAdminCodeGroup");
+const communityAdminCode = document.getElementById("communityAdminCode");
+const communityRefreshRequests = document.getElementById("communityRefreshRequests");
+const communityRoleRequestsList = document.getElementById("communityRoleRequestsList");
+const communityApproveRole = document.getElementById("communityApproveRole");
+const communityLocationsList = document.getElementById("communityLocationsList");
+const communityMapFrame = document.getElementById("communityMapFrame");
+const communityMapStatus = document.getElementById("communityMapStatus");
+const communityUseMyLocation = document.getElementById("communityUseMyLocation");
+const communityNearbyActions = document.getElementById("communityNearbyActions");
+const communityEventsList = document.getElementById("communityEventsList");
+const communityLocationForm = document.getElementById("communityLocationForm");
+const communityLocationName = document.getElementById("communityLocationName");
+const communityLocationAddress = document.getElementById("communityLocationAddress");
+const communityCreateLocation = document.getElementById("communityCreateLocation");
+const communityEventForm = document.getElementById("communityEventForm");
+const communityEventLocation = document.getElementById("communityEventLocation");
+const communityEventTitle = document.getElementById("communityEventTitle");
+const communityEventStartsAt = document.getElementById("communityEventStartsAt");
+const communityCreateEvent = document.getElementById("communityCreateEvent");
 const pickerBtn = document.getElementById("pickerBtn");
 const pickerOverlay = document.getElementById("pickerOverlay");
 const pickerClose = document.getElementById("pickerClose");
@@ -192,8 +215,17 @@ let textSuggestResults = [];
 let textSuggestController = null;
 let userSeed = null;
 let deferredInstallPrompt = null;
-let pendingServiceWorker = null;
-let appReloading = false;
+let communityState = {
+  auth: null,
+  profile: null,
+  locations: [],
+  events: [],
+  attendance: [],
+  pendingRoleRequests: [],
+  selectedRoleRequestKey: "",
+  selectedMapLocationId: 0,
+  viewerCoords: null
+};
 let pickerState = {
   bookIndex: 0,
   chapter: 1,
@@ -212,14 +244,32 @@ function readBigUi() {
 function readCommunityInfo() {
   try {
     const raw = localStorage.getItem("communityInfo");
-    if (!raw) return { city: "", church: "" };
+    if (!raw) return {
+      communityKey: "",
+      fullName: "",
+      role: "feligres",
+      requestedRole: "",
+      city: "",
+      church: ""
+    };
     const parsed = JSON.parse(raw);
     return {
+      communityKey: String(parsed.communityKey || ""),
+      fullName: String(parsed.fullName || ""),
+      role: String(parsed.role || "feligres"),
+      requestedRole: String(parsed.requestedRole || ""),
       city: String(parsed.city || ""),
       church: String(parsed.church || "")
     };
   } catch {
-    return { city: "", church: "" };
+    return {
+      communityKey: "",
+      fullName: "",
+      role: "feligres",
+      requestedRole: "",
+      city: "",
+      church: ""
+    };
   }
 }
 
@@ -232,20 +282,567 @@ function writeCommunityInfo(info) {
 }
 
 function updateCommunityUi(info) {
+  const fullName = info.fullName ? info.fullName.trim() : "";
+  const role = info.role ? info.role.trim() : "feligres";
+  const requestedRole = info.requestedRole ? info.requestedRole.trim() : "";
   const city = info.city ? info.city.trim() : "";
   const church = info.church ? info.church.trim() : "";
-  const hasData = Boolean(city || church);
+  const hasData = Boolean(fullName || city || church);
   if (communitySummary) {
     const parts = [];
+    if (fullName) parts.push(fullName);
+    if (role) parts.push(`Rol activo: ${role}`);
+    if (requestedRole && requestedRole !== role) parts.push(`Solicitud: ${requestedRole}`);
     if (city) parts.push(city);
     if (church) parts.push(church);
-    communitySummary.textContent = hasData ? `Comunidad actual: ${parts.join(" · ")}` : "";
+    communitySummary.textContent = hasData ? `Perfil actual: ${parts.join(" · ")}` : "";
     communitySummary.hidden = !hasData;
   }
   if (communityForm) communityForm.hidden = hasData;
   if (communityEdit) communityEdit.hidden = !hasData;
+  if (communityFullName) communityFullName.value = fullName;
+  if (communityRole) communityRole.value = requestedRole || role || "feligres";
   if (communityCity) communityCity.value = city;
   if (communityChurch) communityChurch.value = church;
+  const isLeader = role === "dirigente" || role === "colaborador";
+  const canModerateRoles = role === "dirigente" || Boolean(communityState.auth && communityState.auth.roleApprovalMode === "admin_code");
+  if (communityLocationForm) communityLocationForm.hidden = !isLeader;
+  if (communityEventForm) communityEventForm.hidden = !isLeader;
+  if (communityAdminSection) communityAdminSection.hidden = !canModerateRoles;
+  if (communityAdminCodeGroup) communityAdminCodeGroup.hidden = role === "dirigente";
+  if (communityApproveRole) communityApproveRole.hidden = true;
+}
+
+function getCommunityKey() {
+  const info = readCommunityInfo();
+  if (info.communityKey) return info.communityKey;
+  const generated = `community-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+  writeCommunityInfo({ ...info, communityKey: generated });
+  return generated;
+}
+
+function setCommunityStatus(message, isError) {
+  if (!communityStatus) return;
+  const text = String(message || "").trim();
+  if (!text) {
+    communityStatus.hidden = true;
+    communityStatus.textContent = "";
+    return;
+  }
+  communityStatus.hidden = false;
+  communityStatus.textContent = text;
+  communityStatus.style.borderColor = isError ? "#d59797" : "#e7d4b6";
+  communityStatus.style.background = isError ? "#fff0f0" : "#fff4df";
+}
+
+function escapeHtml(text) {
+  return String(text || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function formatCommunityDate(dateString) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return dateString;
+  return date.toLocaleString("es-AR", {
+    dateStyle: "short",
+    timeStyle: "short"
+  });
+}
+
+function buildMapLink(location) {
+  if (!location) return "#";
+  const lat = Number(location.latitude);
+  const lng = Number(location.longitude);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    const query = encodeURIComponent(`${lat},${lng}`);
+    return `https://www.google.com/maps/search/?api=1&query=${query}`;
+  }
+  const text = [location.name, location.address, location.city].filter(Boolean).join(", ");
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(text)}`;
+}
+
+function isLocalhostOrigin() {
+  if (typeof location === "undefined") return false;
+  return location.hostname === "localhost" || location.hostname === "127.0.0.1";
+}
+
+function isPrivilegedBrowserContext() {
+  if (typeof window === "undefined") return false;
+  return Boolean(window.isSecureContext || isLocalhostOrigin());
+}
+
+function buildCommunityMapEmbedUrl(location, viewerCoords) {
+  const fallbackLat = viewerCoords && Number.isFinite(Number(viewerCoords.latitude))
+    ? Number(viewerCoords.latitude)
+    : -42.7692;
+  const fallbackLng = viewerCoords && Number.isFinite(Number(viewerCoords.longitude))
+    ? Number(viewerCoords.longitude)
+    : -65.0385;
+  const lat = location && Number.isFinite(Number(location.latitude)) ? Number(location.latitude) : fallbackLat;
+  const lng = location && Number.isFinite(Number(location.longitude)) ? Number(location.longitude) : fallbackLng;
+  const delta = 0.03;
+  const left = lng - delta;
+  const right = lng + delta;
+  const top = lat + delta;
+  const bottom = lat - delta;
+  const marker = `${lat},${lng}`;
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${marker}`;
+}
+
+function toRadians(value) {
+  return (value * Math.PI) / 180;
+}
+
+function calculateDistanceKm(origin, location) {
+  if (!origin || !location) return null;
+  const lat1 = Number(origin.latitude);
+  const lng1 = Number(origin.longitude);
+  const lat2 = Number(location.latitude);
+  const lng2 = Number(location.longitude);
+  if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) return null;
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
+
+function formatDistanceKm(distanceKm) {
+  if (!Number.isFinite(distanceKm)) return "";
+  if (distanceKm < 1) return `${Math.round(distanceKm * 1000)} m`;
+  return `${distanceKm.toFixed(distanceKm < 10 ? 1 : 0)} km`;
+}
+
+function findCommunityLocationById(locationId) {
+  return (communityState.locations || []).find((location) => Number(location.id) === Number(locationId)) || null;
+}
+
+function renderCommunityMap() {
+  if (!communityMapFrame || !communityNearbyActions || !communityMapStatus) return;
+  const locations = communityState.locations || [];
+  const viewerCoords = communityState.viewerCoords;
+  if (!locations.length) {
+    communityMapFrame.src = buildCommunityMapEmbedUrl(null, viewerCoords);
+    communityNearbyActions.innerHTML = `<p class="community-empty">Todavia no hay sedes para mostrar en el mapa.</p>`;
+    communityMapStatus.textContent = "Crea una sede para verla en el mapa.";
+    return;
+  }
+  const selectedLocation = findCommunityLocationById(communityState.selectedMapLocationId) || locations[0];
+  communityState.selectedMapLocationId = Number(selectedLocation.id);
+  communityMapFrame.src = buildCommunityMapEmbedUrl(selectedLocation, viewerCoords);
+
+  const sortedLocations = locations
+    .map((location) => ({
+      location,
+      distanceKm: calculateDistanceKm(viewerCoords, location)
+    }))
+    .sort((a, b) => {
+      if (Number.isFinite(a.distanceKm) && Number.isFinite(b.distanceKm)) return a.distanceKm - b.distanceKm;
+      if (Number.isFinite(a.distanceKm)) return -1;
+      if (Number.isFinite(b.distanceKm)) return 1;
+      return String(a.location.name).localeCompare(String(b.location.name));
+    })
+    .slice(0, 6);
+
+  communityNearbyActions.innerHTML = sortedLocations.map(({ location, distanceKm }) => {
+    const isSelected = Number(location.id) === Number(selectedLocation.id);
+    const distanceLabel = Number.isFinite(distanceKm) ? ` · ${formatDistanceKm(distanceKm)}` : "";
+    return `<button class="ghost community-map-location-btn" type="button" data-location-id="${location.id}">${isSelected ? "Viendo" : "Ver"} ${escapeHtml(location.name)}${escapeHtml(distanceLabel)}</button>`;
+  }).join("");
+
+  const selectedDistance = calculateDistanceKm(viewerCoords, selectedLocation);
+  if (Number.isFinite(selectedDistance)) {
+    communityMapStatus.textContent = `Mostrando ${selectedLocation.name} a ${formatDistanceKm(selectedDistance)} de tu ubicacion.`;
+    return;
+  }
+  communityMapStatus.textContent = isPrivilegedBrowserContext()
+    ? `Mostrando ${selectedLocation.name}. Usa tu ubicacion para ordenar congregaciones cercanas.`
+    : `Mostrando ${selectedLocation.name}. En esta URL el navegador no habilita ubicacion; para cercania real usa https o localhost.`;
+}
+
+function selectCommunityMapLocation(locationId) {
+  communityState.selectedMapLocationId = Number(locationId) || 0;
+  renderCommunityMap();
+}
+
+async function useCommunityViewerLocation() {
+  if (!navigator.geolocation) {
+    setCommunityStatus("Este dispositivo no permite geolocalizacion.", true);
+    return;
+  }
+  if (!isPrivilegedBrowserContext()) {
+    setCommunityStatus("La ubicacion del dispositivo solo funciona en https o en localhost.", true);
+    if (communityMapStatus) {
+      communityMapStatus.textContent = "En esta URL el navegador no habilita geolocalizacion. Probalo en https o localhost.";
+    }
+    return;
+  }
+  const position = await new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 60000
+    });
+  });
+  communityState.viewerCoords = {
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude
+  };
+  renderCommunityMap();
+  setCommunityStatus("Ubicacion actual tomada para mostrar sedes cercanas.", false);
+}
+
+async function communityRequest(path, options) {
+  const url = `${getPushServerUrl()}${path}`;
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch (error) {
+    throw new Error(`No pude conectar con la API en ${getPushServerUrl()}.`);
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || `request failed (${response.status})`);
+  }
+  return data;
+}
+
+function findSelectedRoleRequest() {
+  if (!communityState.selectedRoleRequestKey) return null;
+  return (communityState.pendingRoleRequests || []).find((item) => item.communityKey === communityState.selectedRoleRequestKey) || null;
+}
+
+function selectCommunityRoleRequest(communityKey) {
+  communityState.selectedRoleRequestKey = communityKey || "";
+  renderCommunityRoleRequests();
+}
+
+function populateCommunityLocationSelect() {
+  if (!communityEventLocation) return;
+  const locations = communityState.locations || [];
+  if (!locations.length) {
+    communityEventLocation.innerHTML = `<option value="">No hay sedes</option>`;
+    return;
+  }
+  communityEventLocation.innerHTML = locations.map((location) => (
+    `<option value="${location.id}">${escapeHtml(location.name)}${location.city ? ` · ${escapeHtml(location.city)}` : ""}</option>`
+  )).join("");
+}
+
+function renderCommunityLocations() {
+  if (!communityLocationsList) return;
+  const locations = communityState.locations || [];
+  if (!locations.length) {
+    communityLocationsList.innerHTML = `<p class="community-empty">Todavia no hay sedes registradas.</p>`;
+    populateCommunityLocationSelect();
+    return;
+  }
+  communityLocationsList.innerHTML = locations.map((location) => `
+    <div class="community-card">
+      <p class="community-card-title">${escapeHtml(location.name)}</p>
+      <p>${escapeHtml([location.address, location.city, location.church].filter(Boolean).join(" · "))}</p>
+      <div class="community-card-actions">
+        <button class="ghost community-map-location-btn" type="button" data-location-id="${location.id}">Ver en mapa</button>
+        <a class="ghost" href="${buildMapLink(location)}" target="_blank" rel="noopener">Abrir mapa</a>
+      </div>
+    </div>
+  `).join("");
+  populateCommunityLocationSelect();
+  renderCommunityMap();
+}
+
+function renderCommunityEvents() {
+  if (!communityEventsList) return;
+  const events = communityState.events || [];
+  const attendanceMap = new Map((communityState.attendance || []).map((item) => [item.eventId, item]));
+  if (!events.length) {
+    communityEventsList.innerHTML = `<p class="community-empty">Todavia no hay eventos activos.</p>`;
+    return;
+  }
+  communityEventsList.innerHTML = events.map((event) => {
+    const ownAttendance = attendanceMap.get(event.id);
+    return `
+      <div class="community-card" data-community-event-id="${event.id}">
+        <p class="community-card-title">${escapeHtml(event.title)}</p>
+        <p class="community-card-meta">${escapeHtml(event.location.name)} · ${escapeHtml(formatCommunityDate(event.startsAt))}</p>
+        <p>${escapeHtml(event.description || "Sin descripcion por ahora.")}</p>
+        <p class="community-card-meta">Presentes: ${event.attendance.total} · Dirigentes: ${event.attendance.dirigentes} · Colaboradores: ${event.attendance.colaboradores} · Feligreses: ${event.attendance.feligreses}</p>
+        <div class="community-card-actions">
+          <button class="ghost community-checkin-btn" type="button" data-event-id="${event.id}">${ownAttendance && ownAttendance.status === "checked_in" ? "Check-in hecho" : "Estoy aqui"}</button>
+          <a class="ghost" href="${buildMapLink(event.location)}" target="_blank" rel="noopener">Como llegar</a>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderCommunityRoleRequests() {
+  if (!communityRoleRequestsList) return;
+  const requests = communityState.pendingRoleRequests || [];
+  const selected = findSelectedRoleRequest();
+  if (!requests.length) {
+    communityRoleRequestsList.innerHTML = `<p class="community-empty">No hay solicitudes pendientes.</p>`;
+    if (communityApproveRole) communityApproveRole.hidden = true;
+    return;
+  }
+  communityRoleRequestsList.innerHTML = requests.map((request) => {
+    const isSelected = request.communityKey === communityState.selectedRoleRequestKey;
+    return `
+      <div class="community-card${isSelected ? " selected" : ""}" data-role-request-key="${escapeHtml(request.communityKey)}">
+        <p class="community-card-title">${escapeHtml(request.fullName || "Sin nombre")}</p>
+        <p class="community-card-role">Solicita ${escapeHtml(request.requestedRole || "rol")}</p>
+        <p>${escapeHtml([request.city, request.church].filter(Boolean).join(" · ") || "Sin ciudad ni iglesia cargadas.")}</p>
+        <p class="community-card-meta">Rol actual: ${escapeHtml(request.role || "feligres")} · Pedido: ${escapeHtml(formatCommunityDate(request.requestedAt) || "recién")}</p>
+        <div class="community-card-actions vertical">
+          <button class="ghost community-role-request-select" type="button" data-community-key="${escapeHtml(request.communityKey)}">${isSelected ? "Solicitud seleccionada" : "Seleccionar solicitud"}</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+  if (communityApproveRole) {
+    communityApproveRole.hidden = !selected;
+    communityApproveRole.textContent = selected
+      ? `Aprobar como ${selected.requestedRole}`
+      : "Aprobar solicitud seleccionada";
+  }
+}
+
+function getCommunityAdminCodeForRequests() {
+  const typedCode = communityAdminCode ? communityAdminCode.value.trim() : "";
+  if (typedCode) return typedCode;
+  if (communityState.auth && communityState.auth.localAdminCodeHint) {
+    return String(communityState.auth.localAdminCodeHint).trim();
+  }
+  return "";
+}
+
+async function loadCommunityRoleRequests(showMessage) {
+  const info = readCommunityInfo();
+  const role = info.role || "feligres";
+  const adminCode = getCommunityAdminCodeForRequests();
+  const canModerateRoles = role === "dirigente" || Boolean(communityState.auth && communityState.auth.roleApprovalMode === "admin_code");
+  if (!canModerateRoles) {
+    communityState.pendingRoleRequests = [];
+    communityState.selectedRoleRequestKey = "";
+    renderCommunityRoleRequests();
+    return;
+  }
+  const query = new URLSearchParams({ communityKey: getCommunityKey() });
+  if (role !== "dirigente" && adminCode) query.set("adminCode", adminCode);
+  const data = await communityRequest(`/community/role-requests?${query.toString()}`);
+  communityState.pendingRoleRequests = Array.isArray(data.requests) ? data.requests : [];
+  if (communityState.selectedRoleRequestKey) {
+    const selected = findSelectedRoleRequest();
+    if (!selected) communityState.selectedRoleRequestKey = "";
+  }
+  renderCommunityRoleRequests();
+  if (showMessage) {
+    setCommunityStatus("Solicitudes actualizadas.", false);
+  }
+}
+
+async function loadCommunityData(showMessage) {
+  const communityKey = getCommunityKey();
+  const data = await communityRequest(`/community/bootstrap?communityKey=${encodeURIComponent(communityKey)}`);
+  communityState = {
+    auth: data.auth || null,
+    profile: data.profile || null,
+    locations: Array.isArray(data.locations) ? data.locations : [],
+    events: Array.isArray(data.events) ? data.events : [],
+    attendance: Array.isArray(data.attendance) ? data.attendance : [],
+    pendingRoleRequests: Array.isArray(data.pendingRoleRequests) ? data.pendingRoleRequests : [],
+    selectedRoleRequestKey: "",
+    selectedMapLocationId: communityState.selectedMapLocationId,
+    viewerCoords: communityState.viewerCoords
+  };
+  const localInfo = readCommunityInfo();
+  if (data.profile) {
+    const merged = {
+      ...localInfo,
+      communityKey,
+      fullName: data.profile.fullName || localInfo.fullName || "",
+      role: data.profile.role || localInfo.role || "feligres",
+      requestedRole: data.profile.requestedRole || "",
+      city: data.profile.city || localInfo.city || "",
+      church: data.profile.church || localInfo.church || ""
+    };
+    writeCommunityInfo(merged);
+    updateCommunityUi(merged);
+  } else {
+    updateCommunityUi(localInfo);
+  }
+  if (communityApiHint) {
+    const localApproval = communityState.auth && communityState.auth.roleApprovalMode === "admin_code"
+      ? ` · codigo local: ${communityState.auth.localAdminCodeHint || "configurado"}`
+      : "";
+    communityApiHint.textContent = `API: ${getPushServerUrl()}${localApproval}`;
+  }
+  renderCommunityLocations();
+  renderCommunityEvents();
+  renderCommunityRoleRequests();
+  renderCommunityMap();
+  if (communityState.auth && communityState.auth.roleApprovalMode === "admin_code") {
+    loadCommunityRoleRequests(false).catch(() => {
+      // ignore role request refresh until the user needs it
+    });
+  }
+  if (showMessage) {
+    setCommunityStatus("Comunidad actualizada.", false);
+  }
+}
+
+async function saveCommunityProfile() {
+  const communityKey = getCommunityKey();
+  const fullName = communityFullName ? communityFullName.value.trim() : "";
+  const city = communityCity ? communityCity.value.trim() : "";
+  const church = communityChurch ? communityChurch.value.trim() : "";
+  if (!fullName) {
+    setCommunityStatus("Escribe tu nombre para guardar el perfil.", true);
+    return;
+  }
+  const payload = { communityKey, fullName, city, church, status: "active" };
+  const data = await communityRequest("/community/profile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  writeCommunityInfo({
+    communityKey,
+    fullName: data.profile.fullName,
+    role: data.profile.role,
+    requestedRole: data.profile.requestedRole || "",
+    city: data.profile.city || "",
+    church: data.profile.church || ""
+  });
+  updateCommunityUi(readCommunityInfo());
+  await updatePushPreferences().catch(() => {
+    // ignore
+  });
+  await loadCommunityData(false);
+  setCommunityStatus("Perfil guardado.", false);
+}
+
+async function requestCommunityRole() {
+  const requestedRole = communityRole ? communityRole.value : "feligres";
+  if (!["colaborador", "dirigente"].includes(requestedRole)) {
+    setCommunityStatus("Selecciona colaborador o dirigente para pedir elevacion.", true);
+    return;
+  }
+  await saveCommunityProfile();
+  const data = await communityRequest("/community/role-request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      communityKey: getCommunityKey(),
+      requestedRole
+    })
+  });
+  const info = readCommunityInfo();
+  writeCommunityInfo({
+    ...info,
+    role: data.profile.role,
+    requestedRole: data.profile.requestedRole || requestedRole
+  });
+  updateCommunityUi(readCommunityInfo());
+  await loadCommunityData(false);
+  setCommunityStatus(`Solicitud enviada para rol ${requestedRole}.`, false);
+}
+
+async function approveCommunityRole() {
+  const selectedRequest = findSelectedRoleRequest();
+  const requestedRole = selectedRequest && selectedRequest.requestedRole ? selectedRequest.requestedRole : "";
+  const adminCode = communityAdminCode ? communityAdminCode.value.trim() : "";
+  const info = readCommunityInfo();
+  const requiresCode = info.role !== "dirigente";
+  if (!selectedRequest) {
+    setCommunityStatus("Selecciona una solicitud antes de aprobar.", true);
+    return;
+  }
+  if (requiresCode && !adminCode) {
+    setCommunityStatus("Escribe el codigo admin local.", true);
+    return;
+  }
+  const data = await communityRequest("/community/approve-role", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      communityKey: getCommunityKey(),
+      targetCommunityKey: selectedRequest.communityKey,
+      approvedRole: requestedRole,
+      adminCode
+    })
+  });
+  if (communityAdminCode) communityAdminCode.value = "";
+  await loadCommunityData(false);
+  await loadCommunityRoleRequests(false).catch(() => {
+    // ignore
+  });
+  setCommunityStatus(`Rol aprobado para ${data.profile.fullName}: ${data.profile.role}.`, false);
+}
+
+async function createCommunityLocation() {
+  const info = readCommunityInfo();
+  const name = communityLocationName ? communityLocationName.value.trim() : "";
+  const address = communityLocationAddress ? communityLocationAddress.value.trim() : "";
+  if (!name) {
+    setCommunityStatus("Escribe el nombre de la sede.", true);
+    return;
+  }
+  await communityRequest("/community/locations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      communityKey: getCommunityKey(),
+      name,
+      address,
+      city: info.city,
+      church: info.church
+    })
+  });
+  if (communityLocationName) communityLocationName.value = "";
+  if (communityLocationAddress) communityLocationAddress.value = "";
+  await loadCommunityData(false);
+  setCommunityStatus("Sede creada.", false);
+}
+
+async function createCommunityEvent() {
+  const title = communityEventTitle ? communityEventTitle.value.trim() : "";
+  const startsAt = communityEventStartsAt ? communityEventStartsAt.value : "";
+  const locationId = communityEventLocation ? Number(communityEventLocation.value) : 0;
+  if (!title || !startsAt || !locationId) {
+    setCommunityStatus("Completa sede, titulo y fecha del evento.", true);
+    return;
+  }
+  await communityRequest("/community/events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      communityKey: getCommunityKey(),
+      locationId,
+      title,
+      startsAt: new Date(startsAt).toISOString(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+    })
+  });
+  if (communityEventTitle) communityEventTitle.value = "";
+  await loadCommunityData(false);
+  setCommunityStatus("Evento creado.", false);
+}
+
+async function checkInToCommunityEvent(eventId) {
+  await communityRequest(`/community/events/${eventId}/check-in`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ communityKey: getCommunityKey() })
+  });
+  await loadCommunityData(false);
+  setCommunityStatus("Check-in registrado.", false);
 }
 
 function applyBigUi(enabled) {
@@ -260,11 +857,20 @@ function getPushServerUrl() {
   } catch {
     // ignore
   }
+  if (typeof location !== "undefined") {
+    if (location.protocol === "http:" && !location.hostname.endsWith("github.io")) {
+      return `${location.origin}/api`;
+    }
+  }
   return PUSH_SERVER_URL;
 }
 
 function pushSupported() {
   return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+function pushAllowedInCurrentContext() {
+  return pushSupported() && isPrivilegedBrowserContext();
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -287,7 +893,7 @@ async function fetchVapidKey() {
 }
 
 async function getPushSubscription() {
-  if (!pushSupported()) return null;
+  if (!pushAllowedInCurrentContext()) return null;
   const reg = await navigator.serviceWorker.ready;
   return reg.pushManager.getSubscription();
 }
@@ -313,6 +919,23 @@ async function refreshPushStatus() {
     ]);
     return;
   }
+  if (!isPrivilegedBrowserContext()) {
+    setPushStatus("Notificaciones disponibles solo en https o localhost.");
+    if (pushToggle) {
+      pushToggle.textContent = "Requiere https o localhost";
+      pushToggle.disabled = true;
+    }
+    if (pushResubscribe) {
+      pushResubscribe.disabled = true;
+      pushResubscribe.textContent = "Recrear suscripcion";
+    }
+    setPushDebug([
+      "Push bloqueado por contexto inseguro.",
+      `URL actual: ${typeof location !== "undefined" ? location.origin : ""}`,
+      "Abri esta app en https o en http://localhost para probar permisos y suscripcion."
+    ]);
+    return;
+  }
   const permission = Notification.permission;
   if (permission === "denied") {
     setPushStatus("Notificaciones bloqueadas en el navegador.");
@@ -325,6 +948,10 @@ async function refreshPushStatus() {
       `Permiso: denied`,
       `Servidor: ${getPushServerUrl()}`
     ]);
+    if (pushResubscribe) {
+      pushResubscribe.disabled = true;
+      pushResubscribe.textContent = "Recrear suscripcion";
+    }
     return;
   }
   const sub = await getPushSubscription();
@@ -341,97 +968,29 @@ async function refreshPushStatus() {
       pushToggle.disabled = false;
     }
   }
+  if (pushResubscribe) {
+    pushResubscribe.disabled = !sub;
+    pushResubscribe.textContent = sub ? "Recrear suscripcion" : "Recrear suscripcion";
+  }
   setPushDebug([
     `Soporte Push: si`,
     `Permiso: ${permission}`,
     `Service Worker: listo`,
     `Servidor: ${getPushServerUrl()}`,
-    `Suscripcion: ${sub ? "activa" : "ninguna"}`
+    `Suscripcion: ${sub ? "activa" : "ninguna"}`,
+    "Recrear suscripcion sirve para borrar la suscripcion actual y pedir una nueva cuando el navegador o el endpoint quedaron desincronizados."
   ]);
 }
 
-function setUpdateStatus(text, showReload) {
-  if (updateStatus) updateStatus.textContent = text;
-  if (updateReload) updateReload.hidden = !showReload;
-}
-
-function refreshVersionUi() {
-  if (!appVersionText) return;
-  appVersionText.textContent = `Version ${APP_VERSION}`;
-}
-
-function watchInstallingWorker(worker) {
-  if (!worker) return;
-  worker.addEventListener("statechange", () => {
-    if (worker.state === "installed" && navigator.serviceWorker.controller) {
-      pendingServiceWorker = worker;
-      setUpdateStatus("Hay una nueva version disponible.", true);
-    }
-  });
-}
-
-async function refreshAppUpdateStatus() {
-  refreshVersionUi();
-  if (!("serviceWorker" in navigator)) {
-    setUpdateStatus("Actualizaciones automaticas no disponibles en este navegador.", false);
-    return;
-  }
-  try {
-    const reg = await navigator.serviceWorker.getRegistration();
-    if (!reg) {
-      setUpdateStatus("Service worker todavia no registrado.", false);
-      return;
-    }
-    if (reg.waiting) {
-      pendingServiceWorker = reg.waiting;
-      setUpdateStatus("Hay una nueva version disponible.", true);
-      return;
-    }
-    if (reg.installing) {
-      watchInstallingWorker(reg.installing);
-      setUpdateStatus("Descargando nueva version...", false);
-      return;
-    }
-    setUpdateStatus("App actualizada.", false);
-  } catch {
-    setUpdateStatus("No se pudo verificar el estado de actualizacion.", false);
-  }
-}
-
-function initAppUpdateHandling() {
-  refreshVersionUi();
-  if (!("serviceWorker" in navigator)) {
-    setUpdateStatus("Actualizaciones automaticas no disponibles en este navegador.", false);
-    return;
-  }
-  navigator.serviceWorker.getRegistration().then((reg) => {
-    if (!reg) {
-      setUpdateStatus("Esperando registro de la app...", false);
-      return;
-    }
-    if (reg.installing) watchInstallingWorker(reg.installing);
-    reg.addEventListener("updatefound", () => {
-      if (reg.installing) {
-        setUpdateStatus("Descargando nueva version...", false);
-        watchInstallingWorker(reg.installing);
-      }
-    });
-    refreshAppUpdateStatus().catch(() => {
-      // ignore
-    });
-  }).catch(() => {
-    setUpdateStatus("No se pudo iniciar el sistema de actualizaciones.", false);
-  });
-
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (appReloading) return;
-    appReloading = true;
-    setUpdateStatus("Aplicando nueva version...", false);
-    window.location.reload();
-  });
-}
-
 async function subscribeToPush() {
+  if (!isPrivilegedBrowserContext()) {
+    setPushStatus("No se pueden activar notificaciones en esta URL.");
+    setPushDebug([
+      "El navegador no permite service worker push en contexto inseguro.",
+      "Usa https o localhost."
+    ]);
+    return;
+  }
   try {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {
@@ -510,7 +1069,10 @@ async function unsubscribeFromPush() {
 }
 
 async function togglePushNotifications() {
-  if (!pushSupported()) return;
+  if (!pushAllowedInCurrentContext()) {
+    await refreshPushStatus();
+    return;
+  }
   const sub = await getPushSubscription();
   if (sub) {
     await unsubscribeFromPush();
@@ -520,7 +1082,10 @@ async function togglePushNotifications() {
 }
 
 async function resubscribePushNotifications() {
-  if (!pushSupported()) return;
+  if (!pushAllowedInCurrentContext()) {
+    await refreshPushStatus();
+    return;
+  }
   try {
     const sub = await getPushSubscription();
     if (sub) {
@@ -2308,13 +2873,13 @@ addListener(pushResubscribe, "click", () => {
   });
 });
 addListener(communitySave, "click", () => {
-  const city = communityCity ? communityCity.value.trim() : "";
-  const church = communityChurch ? communityChurch.value.trim() : "";
-  const info = { city, church };
-  writeCommunityInfo(info);
-  updateCommunityUi(info);
-  updatePushPreferences().catch(() => {
-    // ignore
+  saveCommunityProfile().catch((error) => {
+    setCommunityStatus(String(error && error.message ? error.message : error), true);
+  });
+});
+addListener(communityRequestRole, "click", () => {
+  requestCommunityRole().catch((error) => {
+    setCommunityStatus(String(error && error.message ? error.message : error), true);
   });
 });
 addListener(communityEdit, "click", () => {
@@ -2322,6 +2887,8 @@ addListener(communityEdit, "click", () => {
   if (communityForm) communityForm.hidden = false;
   if (communityEdit) communityEdit.hidden = true;
   if (communitySummary) communitySummary.hidden = true;
+  if (communityFullName) communityFullName.value = info.fullName || "";
+  if (communityRole) communityRole.value = info.requestedRole || info.role || "feligres";
   if (communityCity) communityCity.value = info.city || "";
   if (communityChurch) communityChurch.value = info.church || "";
 });
@@ -2329,12 +2896,84 @@ addListener(communityOpen, "click", () => {
   const info = readCommunityInfo();
   updateCommunityUi(info);
   if (communityOverlay) communityOverlay.hidden = false;
+  loadCommunityData(false).catch((error) => {
+    setCommunityStatus(String(error && error.message ? error.message : error), true);
+  });
 });
 addListener(communityClose, "click", () => {
   if (communityOverlay) communityOverlay.hidden = true;
 });
 addListener(communityOverlay, "click", (event) => {
   if (event.target === communityOverlay) communityOverlay.hidden = true;
+});
+addListener(communityRefresh, "click", () => {
+  loadCommunityData(true).catch((error) => {
+    setCommunityStatus(String(error && error.message ? error.message : error), true);
+  });
+});
+addListener(communityRefreshRequests, "click", () => {
+  loadCommunityRoleRequests(true).catch((error) => {
+    setCommunityStatus(String(error && error.message ? error.message : error), true);
+  });
+});
+addListener(communityApproveRole, "click", () => {
+  approveCommunityRole().catch((error) => {
+    setCommunityStatus(String(error && error.message ? error.message : error), true);
+  });
+});
+addListener(communityRoleRequestsList, "click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const button = target.closest(".community-role-request-select");
+  if (!button) return;
+  const communityKey = button.getAttribute("data-community-key");
+  if (!communityKey) return;
+  selectCommunityRoleRequest(communityKey);
+});
+addListener(communityUseMyLocation, "click", () => {
+  useCommunityViewerLocation().catch((error) => {
+    const message = error && error.message ? error.message : "No pude obtener tu ubicacion.";
+    setCommunityStatus(String(message), true);
+  });
+});
+addListener(communityLocationsList, "click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const button = target.closest(".community-map-location-btn");
+  if (!button) return;
+  const locationId = Number(button.getAttribute("data-location-id"));
+  if (!locationId) return;
+  selectCommunityMapLocation(locationId);
+});
+addListener(communityNearbyActions, "click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const button = target.closest(".community-map-location-btn");
+  if (!button) return;
+  const locationId = Number(button.getAttribute("data-location-id"));
+  if (!locationId) return;
+  selectCommunityMapLocation(locationId);
+});
+addListener(communityCreateLocation, "click", () => {
+  createCommunityLocation().catch((error) => {
+    setCommunityStatus(String(error && error.message ? error.message : error), true);
+  });
+});
+addListener(communityCreateEvent, "click", () => {
+  createCommunityEvent().catch((error) => {
+    setCommunityStatus(String(error && error.message ? error.message : error), true);
+  });
+});
+addListener(communityEventsList, "click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const button = target.closest(".community-checkin-btn");
+  if (!button) return;
+  const eventId = Number(button.getAttribute("data-event-id"));
+  if (!eventId) return;
+  checkInToCommunityEvent(eventId).catch((error) => {
+    setCommunityStatus(String(error && error.message ? error.message : error), true);
+  });
 });
 addListener(bigUiToggle, "change", () => {
   const enabled = !!bigUiToggle && bigUiToggle.checked;
@@ -2355,10 +2994,6 @@ addListener(notesList, "click", (event) => {
   openNoteFromIndex(key);
 });
 addListener(bookmarkBtn, "click", toggleCurrentBookmark);
-addListener(updateReload, "click", () => {
-  setUpdateStatus("Recargando app...", false);
-  window.location.reload();
-});
 addListener(bookmarksList, "click", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
@@ -2457,7 +3092,6 @@ if (themeCheckboxes.length) {
 }
 
 initVersions();
-initAppUpdateHandling();
 refreshPushStatus().catch(() => {
   // ignore
 });
@@ -2465,6 +3099,16 @@ restoreLastQuery();
 initSplash();
 const communityInfo = readCommunityInfo();
 updateCommunityUi(communityInfo);
+if (communityApiHint) communityApiHint.textContent = `API: ${getPushServerUrl()}`;
+getCommunityKey();
+if (typeof location !== "undefined") {
+  const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  if (isLocalhost) {
+    loadCommunityData(false).catch(() => {
+      // ignore initial local bootstrap errors
+    });
+  }
+}
 
 function initSplash() {
   splash.hidden = false;
@@ -2966,9 +3610,6 @@ function openMenu() {
   if (!sideMenu) return;
   renderBookmarksIndex();
   renderNotesIndex();
-  refreshAppUpdateStatus().catch(() => {
-    // ignore
-  });
   refreshPushStatus().catch(() => {
     // ignore
   });
