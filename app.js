@@ -1836,7 +1836,7 @@ async function fetchVerse() {
   const parsed = parseReference(queryInput.value);
   if (!parsed) {
     showStatus("Formato invalido. Usa Libro Capitulo:Verso", true);
-    return;
+    return false;
   }
   textSuggestResults = [];
   if (querySuggestions) querySuggestions.hidden = true;
@@ -1859,7 +1859,7 @@ async function fetchVerse() {
   const cached = readCache(cacheKey);
   if (cached) {
     showResult(cached.text, cached.reference);
-    return;
+    return true;
   }
   const fetchUrls = buildFetchUrls(url);
 
@@ -1868,22 +1868,22 @@ async function fetchVerse() {
     const html = await fetchFirstHtml(fetchUrls, 7000);
     if (!html) {
       showStatus("No se pudo obtener contenido del servidor.", true);
-      return;
+      return false;
     }
     if (isNoResults(html)) {
-      showStatus("No existe esa referencia.", true);
-      return;
+      return false;
     }
     const verseText = parseHTML(html, parsed);
     if (!verseText) {
-      showStatus("No se pudo extraer el versiculo.", true);
-      return;
+      return false;
     }
     const reference = buildReference(parsed.book, parsed.chapter, parsed.verseStart, parsed.verseEnd, version);
     writeCache(cacheKey, { text: verseText, reference });
     showResult(verseText, reference);
+    return true;
   } catch (err) {
     showStatus("Error de red al conectar con el servidor local.", true);
+    return false;
   }
 }
 
@@ -1993,22 +1993,81 @@ function showResult(text, reference) {
   refreshBookmarkButton();
 }
 
-function goPrev() {
-  const parsed = parseReference(queryInput.value);
-  if (!parsed) return;
-  const prev = Math.max(1, parsed.verseStart - 1);
-  const book = parsed.book.replace(/^(\d)([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])/, "$1 $2");
-  queryInput.value = `${book} ${parsed.chapter}:${prev}`;
-  fetchVerse();
+function normalizeBookKey(name) {
+  return String(name || "").toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ").trim();
 }
 
-function goNext() {
+function showZenBookTransition(bookName) {
+  return new Promise((resolve) => {
+    if (!isZenOpen || !zenText || !zenRef) { resolve(); return; }
+    zenText.textContent = bookName;
+    zenRef.textContent = "";
+    setTimeout(resolve, 1400);
+  });
+}
+
+async function goPrev() {
   const parsed = parseReference(queryInput.value);
   if (!parsed) return;
-  const next = parsed.verseEnd + 1;
   const book = parsed.book.replace(/^(\d)([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])/, "$1 $2");
-  queryInput.value = `${book} ${parsed.chapter}:${next}`;
-  fetchVerse();
+
+  if (parsed.verseStart > 1) {
+    queryInput.value = `${book} ${parsed.chapter}:${parsed.verseStart - 1}`;
+    await fetchVerse();
+    return;
+  }
+
+  if (parsed.chapter > 1) {
+    queryInput.value = `${book} ${parsed.chapter - 1}:200`;
+    const ok = await fetchVerse();
+    if (!ok) {
+      for (let v = 150; v >= 1; v--) {
+        queryInput.value = `${book} ${parsed.chapter - 1}:${v}`;
+        const found = await fetchVerse();
+        if (found) return;
+      }
+    }
+    return;
+  }
+
+  const bookIndex = BOOKS.findIndex((b) => normalizeBookKey(b) === normalizeBookKey(book));
+  if (bookIndex > 0) {
+    const prevBook = BOOKS[bookIndex - 1];
+    await showZenBookTransition(prevBook);
+    queryInput.value = `${prevBook} 999:200`;
+    const ok = await fetchVerse();
+    if (!ok) {
+      for (let c = 50; c >= 1; c--) {
+        queryInput.value = `${prevBook} ${c}:1`;
+        const found = await fetchVerse();
+        if (found) return;
+      }
+    }
+  }
+}
+
+async function goNext() {
+  const parsed = parseReference(queryInput.value);
+  if (!parsed) return;
+  const book = parsed.book.replace(/^(\d)([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])/, "$1 $2");
+
+  queryInput.value = `${book} ${parsed.chapter}:${parsed.verseEnd + 1}`;
+  const ok = await fetchVerse();
+  if (ok) return;
+
+  queryInput.value = `${book} ${parsed.chapter + 1}:1`;
+  const ok2 = await fetchVerse();
+  if (ok2) return;
+
+  const bookIndex = BOOKS.findIndex((b) => normalizeBookKey(b) === normalizeBookKey(book));
+  if (bookIndex >= 0 && bookIndex < BOOKS.length - 1) {
+    const nextBook = BOOKS[bookIndex + 1];
+    await showZenBookTransition(nextBook);
+    queryInput.value = `${nextBook} 1:1`;
+    await fetchVerse();
+  }
 }
 
 function persistLastQuery() {
