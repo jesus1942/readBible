@@ -11,6 +11,16 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <!-- SVG filter for hand-drawn button edges -->
+    <svg width="0" height="0" style="position:absolute;overflow:hidden" aria-hidden="true">
+      <defs>
+        <filter id="sketch">
+          <feTurbulence type="fractalNoise" baseFrequency="0.022 0.72" numOctaves="3" seed="7" result="noise"/>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.6" xChannelSelector="R" yChannelSelector="G"/>
+        </filter>
+      </defs>
+    </svg>
+
     <main class="app">
       <header class="hero">
         <div>
@@ -18,7 +28,7 @@
           <h1>Versiculos vivos, lectura plena.</h1>
           <p class="subtitle">Busqueda rapida, lectura plena y referencias destacadas.</p>
         </div>
-        <button id="menuBtn" class="menu-btn" aria-label="Abrir menu">☰</button>
+        <button id="menuBtn" class="menu-btn" aria-label="Abrir menu">&#9776;</button>
       </header>
 
       <section class="card search">
@@ -180,6 +190,7 @@
         <div class="side-menu-about">
           <p class="eyebrow">Acerca de</p>
           <p class="about-text">BibleApp, lectura biblica sin distracciones.</p>
+          <button id="developerOpen" class="ghost" style="margin-top:6px">Panel dev</button>
         </div>
       </div>
     </div>
@@ -294,6 +305,36 @@
           <p class="eyebrow">Eventos</p>
           <div id="communityEventsList" class="community-list"></div>
         </div>
+
+        <div id="communityStudyCellsSection" class="community-section">
+          <div class="community-section-head">
+            <p class="eyebrow">Celulas de estudio</p>
+            <button id="communityRefreshCells" class="ghost" type="button">Actualizar</button>
+          </div>
+          <div id="communityCellsList" class="community-list"></div>
+        </div>
+
+        <div id="communityCreateCellForm" class="community-section" hidden>
+          <p class="eyebrow">Nueva celula</p>
+          <label for="communityCellName">Nombre</label>
+          <input id="communityCellName" type="text" placeholder="Ej: Celula de jovenes" />
+          <label for="communityCellDay">Dia de reunion</label>
+          <select id="communityCellDay">
+            <option value="">Elegir dia</option>
+            <option value="lunes">Lunes</option>
+            <option value="martes">Martes</option>
+            <option value="miercoles">Miercoles</option>
+            <option value="jueves">Jueves</option>
+            <option value="viernes">Viernes</option>
+            <option value="sabado">Sabado</option>
+            <option value="domingo">Domingo</option>
+          </select>
+          <label for="communityCellTime">Hora</label>
+          <input id="communityCellTime" type="time" />
+          <label for="communityCellLocation">Sede</label>
+          <select id="communityCellLocation"></select>
+          <button id="communityCreateCellBtn" class="ghost" type="button">Crear celula</button>
+        </div>
       </div>
     </div>
 
@@ -323,6 +364,52 @@
     </div>
 
     <button id="highlightBtn" class="highlight-btn" type="button" hidden>Resaltar</button>
+
+    <!-- Floating bottom nav (appears on scroll) -->
+    <nav id="floatingNav" class="floating-nav" hidden aria-label="Navegacion rapida">
+      <button id="floatSearchBtn" class="floating-nav-btn" type="button">Buscar</button>
+      <button id="floatCommunityBtn" class="floating-nav-btn" type="button">Comunidad</button>
+      <button id="floatMenuBtn" class="floating-nav-btn" type="button">Menu</button>
+    </nav>
+
+    <!-- Developer panel overlay -->
+    <div id="developerOverlay" class="developer-overlay" hidden>
+      <div class="sheet-card">
+        <div class="side-menu-header">
+          <p class="eyebrow">Panel desarrollador</p>
+          <button id="developerClose" class="menu-close" aria-label="Cerrar">&#10005;</button>
+        </div>
+        <div id="developerLoginSection" class="community-section">
+          <p class="eyebrow">Acceso</p>
+          <label for="developerCodeInput">Codigo de desarrollador</label>
+          <input id="developerCodeInput" type="password" placeholder="Codigo secreto" />
+          <button id="developerLoginBtn">Ingresar</button>
+        </div>
+        <div id="developerPanel" hidden>
+          <div class="community-section">
+            <p class="eyebrow">Vista simulada</p>
+            <p class="community-note">Cambia la vista sin modificar el perfil real.</p>
+            <div class="dev-role-switcher">
+              <button class="ghost dev-role-btn" data-dev-role="feligres">Como feligres</button>
+              <button class="ghost dev-role-btn" data-dev-role="colaborador">Como colaborador</button>
+              <button class="ghost dev-role-btn" data-dev-role="dirigente">Como dirigente</button>
+              <button class="ghost dev-role-btn" data-dev-role="">Rol real</button>
+            </div>
+          </div>
+          <div class="community-section">
+            <div class="community-section-head">
+              <p class="eyebrow">Iglesias registradas</p>
+              <button id="devRefreshChurches" class="ghost dev-role-btn">Actualizar</button>
+            </div>
+            <div id="developerChurchList" class="community-list"></div>
+          </div>
+          <div class="community-section">
+            <p class="eyebrow">Celulas de estudio</p>
+            <div id="developerCellList" class="community-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <script
       defer

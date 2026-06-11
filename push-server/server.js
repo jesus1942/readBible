@@ -433,6 +433,43 @@ async function ensureSchema() {
     END
     $$;
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_study_cells (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      meeting_day TEXT,
+      meeting_time TEXT,
+      location_id BIGINT REFERENCES community_locations(id) ON DELETE SET NULL,
+      created_by_user_id BIGINT REFERENCES community_users(id) ON DELETE SET NULL,
+      leader_name TEXT,
+      church TEXT,
+      city TEXT,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS community_study_cells_church_idx ON community_study_cells (church);`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS community_study_cells_active_idx ON community_study_cells (is_active);`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_study_materials (
+      id BIGSERIAL PRIMARY KEY,
+      cell_id BIGINT REFERENCES community_study_cells(id) ON DELETE CASCADE,
+      event_id BIGINT REFERENCES community_events(id) ON DELETE SET NULL,
+      title TEXT NOT NULL,
+      body TEXT,
+      bible_reference TEXT,
+      source TEXT NOT NULL DEFAULT 'leader',
+      created_by_user_id BIGINT REFERENCES community_users(id) ON DELETE SET NULL,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS community_study_materials_cell_idx ON community_study_materials (cell_id);`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS community_study_materials_event_idx ON community_study_materials (event_id);`);
 }
 
 function normalizeThemes(themes) {
@@ -1162,6 +1199,112 @@ app.post("/community/events/:eventId/check-in", async (req, res) => {
     });
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.message || "failed to check in" });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/community/study-cells", async (req, res) => {
+  const { communityKey, church } = req.query;
+  const client = await pool.connect();
+  try {
+    let rows;
+    if (church) {
+      const result = await client.query(
+        `SELECT sc.id, sc.name, sc.description, sc.meeting_day AS "meetingDay", sc.meeting_time AS "meetingTime",
+                sc.location_id AS "locationId", sc.leader_name AS leader, sc.church, sc.city, sc.is_active AS "isActive"
+         FROM community_study_cells sc
+         WHERE sc.church = $1 AND sc.is_active = TRUE
+         ORDER BY sc.name ASC`,
+        [church]
+      );
+      rows = result.rows;
+    } else {
+      const result = await client.query(
+        `SELECT sc.id, sc.name, sc.description, sc.meeting_day AS "meetingDay", sc.meeting_time AS "meetingTime",
+                sc.location_id AS "locationId", sc.leader_name AS leader, sc.church, sc.city, sc.is_active AS "isActive"
+         FROM community_study_cells sc
+         WHERE sc.is_active = TRUE
+         ORDER BY sc.name ASC
+         LIMIT 50`
+      );
+      rows = result.rows;
+    }
+    return res.json({ cells: rows });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "failed to load study cells" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/community/study-cells", async (req, res) => {
+  const { communityKey, name, meetingDay, meetingTime, locationId, church, city } = req.body || {};
+  if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
+  if (!name || !name.trim()) return res.status(400).json({ error: "missing cell name" });
+  const client = await pool.connect();
+  try {
+    const userResult = await client.query(
+      `SELECT id, role FROM community_users WHERE community_key = $1`,
+      [communityKey]
+    );
+    if (!userResult.rows.length) return res.status(403).json({ error: "user not found" });
+    const user = userResult.rows[0];
+    if (user.role !== "dirigente") return res.status(403).json({ error: "solo los dirigentes pueden crear celulas" });
+    const result = await client.query(
+      `INSERT INTO community_study_cells (name, meeting_day, meeting_time, location_id, created_by_user_id, church, city)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, name, meeting_day AS "meetingDay", meeting_time AS "meetingTime", location_id AS "locationId", church, city`,
+      [
+        name.trim(),
+        meetingDay || null,
+        meetingTime || null,
+        locationId || null,
+        user.id,
+        church || null,
+        city || null
+      ]
+    );
+    return res.json({ cell: result.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "failed to create study cell" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/community/study-materials", async (req, res) => {
+  const { communityKey, cellId, eventId, title, body, bibleReference, source } = req.body || {};
+  if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
+  if (!title || !title.trim()) return res.status(400).json({ error: "missing material title" });
+  const client = await pool.connect();
+  try {
+    const userResult = await client.query(
+      `SELECT id, role FROM community_users WHERE community_key = $1`,
+      [communityKey]
+    );
+    if (!userResult.rows.length) return res.status(403).json({ error: "user not found" });
+    const user = userResult.rows[0];
+    if (!["dirigente", "colaborador"].includes(user.role)) {
+      return res.status(403).json({ error: "se requiere rol colaborador o dirigente" });
+    }
+    const result = await client.query(
+      `INSERT INTO community_study_materials (cell_id, event_id, title, body, bible_reference, source, created_by_user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, cell_id AS "cellId", event_id AS "eventId", title, body, bible_reference AS "bibleReference", source`,
+      [
+        cellId || null,
+        eventId || null,
+        title.trim(),
+        body || null,
+        bibleReference || null,
+        source || "leader",
+        user.id
+      ]
+    );
+    return res.json({ material: result.rows[0] });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "failed to create study material" });
   } finally {
     client.release();
   }

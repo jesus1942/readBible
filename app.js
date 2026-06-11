@@ -159,6 +159,29 @@ const communityEventLocation = document.getElementById("communityEventLocation")
 const communityEventTitle = document.getElementById("communityEventTitle");
 const communityEventStartsAt = document.getElementById("communityEventStartsAt");
 const communityCreateEvent = document.getElementById("communityCreateEvent");
+const communityStudyCellsSection = document.getElementById("communityStudyCellsSection");
+const communityRefreshCells = document.getElementById("communityRefreshCells");
+const communityCellsList = document.getElementById("communityCellsList");
+const communityCreateCellForm = document.getElementById("communityCreateCellForm");
+const communityCellName = document.getElementById("communityCellName");
+const communityCellDay = document.getElementById("communityCellDay");
+const communityCellTime = document.getElementById("communityCellTime");
+const communityCellLocation = document.getElementById("communityCellLocation");
+const communityCreateCellBtn = document.getElementById("communityCreateCellBtn");
+const floatingNav = document.getElementById("floatingNav");
+const floatSearchBtn = document.getElementById("floatSearchBtn");
+const floatCommunityBtn = document.getElementById("floatCommunityBtn");
+const floatMenuBtn = document.getElementById("floatMenuBtn");
+const developerOverlay = document.getElementById("developerOverlay");
+const developerClose = document.getElementById("developerClose");
+const developerLoginSection = document.getElementById("developerLoginSection");
+const developerCodeInput = document.getElementById("developerCodeInput");
+const developerLoginBtn = document.getElementById("developerLoginBtn");
+const developerPanel = document.getElementById("developerPanel");
+const developerChurchList = document.getElementById("developerChurchList");
+const developerCellList = document.getElementById("developerCellList");
+const devRefreshChurches = document.getElementById("devRefreshChurches");
+const developerOpen = document.getElementById("developerOpen");
 const pickerBtn = document.getElementById("pickerBtn");
 const pickerOverlay = document.getElementById("pickerOverlay");
 const pickerClose = document.getElementById("pickerClose");
@@ -222,10 +245,13 @@ let communityState = {
   events: [],
   attendance: [],
   pendingRoleRequests: [],
+  cells: [],
   selectedRoleRequestKey: "",
   selectedMapLocationId: 0,
   viewerCoords: null
 };
+let devSimulatedRole = "";
+let devAuthenticated = false;
 let pickerState = {
   bookIndex: 0,
   chapter: 1,
@@ -304,13 +330,17 @@ function updateCommunityUi(info) {
   if (communityRole) communityRole.value = requestedRole || role || "feligres";
   if (communityCity) communityCity.value = city;
   if (communityChurch) communityChurch.value = church;
-  const isLeader = role === "dirigente" || role === "colaborador";
-  const canModerateRoles = role === "dirigente" || Boolean(communityState.auth && communityState.auth.roleApprovalMode === "admin_code");
+  const effectiveRole = devSimulatedRole || role;
+  const isLeader = effectiveRole === "dirigente" || effectiveRole === "colaborador";
+  const isDirigente = effectiveRole === "dirigente";
+  const canModerateRoles = isDirigente || Boolean(communityState.auth && communityState.auth.roleApprovalMode === "admin_code");
   if (communityLocationForm) communityLocationForm.hidden = !isLeader;
   if (communityEventForm) communityEventForm.hidden = !isLeader;
   if (communityAdminSection) communityAdminSection.hidden = !canModerateRoles;
-  if (communityAdminCodeGroup) communityAdminCodeGroup.hidden = role === "dirigente";
+  if (communityAdminCodeGroup) communityAdminCodeGroup.hidden = isDirigente;
   if (communityApproveRole) communityApproveRole.hidden = true;
+  if (communityStudyCellsSection) communityStudyCellsSection.hidden = false;
+  if (communityCreateCellForm) communityCreateCellForm.hidden = !isDirigente;
 }
 
 function getCommunityKey() {
@@ -687,6 +717,7 @@ async function loadCommunityData(showMessage) {
   renderCommunityEvents();
   renderCommunityRoleRequests();
   renderCommunityMap();
+  loadStudyCells().catch(() => {});
   if (communityState.auth && communityState.auth.roleApprovalMode === "admin_code") {
     loadCommunityRoleRequests(false).catch(() => {
       // ignore role request refresh until the user needs it
@@ -843,6 +874,213 @@ async function checkInToCommunityEvent(eventId) {
   });
   await loadCommunityData(false);
   setCommunityStatus("Check-in registrado.", false);
+}
+
+function populateCellLocationSelect() {
+  if (!communityCellLocation) return;
+  const locations = communityState.locations || [];
+  if (!locations.length) {
+    communityCellLocation.innerHTML = `<option value="">No hay sedes</option>`;
+    return;
+  }
+  communityCellLocation.innerHTML = locations.map((loc) => (
+    `<option value="${loc.id}">${escapeHtml(loc.name)}${loc.city ? ` · ${escapeHtml(loc.city)}` : ""}</option>`
+  )).join("");
+}
+
+function renderStudyCells() {
+  if (!communityCellsList) return;
+  const cells = communityState.cells || [];
+  populateCellLocationSelect();
+  if (!cells.length) {
+    communityCellsList.innerHTML = `<p class="community-empty">No hay celulas de estudio registradas.</p>`;
+    return;
+  }
+  communityCellsList.innerHTML = cells.map((cell) => {
+    const location = (communityState.locations || []).find((l) => Number(l.id) === Number(cell.locationId));
+    const schedule = [cell.meetingDay, cell.meetingTime].filter(Boolean).join(" ");
+    return `
+      <div class="study-cell-card" data-cell-id="${cell.id}">
+        <p class="community-card-title">${escapeHtml(cell.name)}</p>
+        ${schedule ? `<span class="study-cell-schedule">${escapeHtml(schedule)}</span>` : ""}
+        ${location ? `<p class="community-card-meta">${escapeHtml(location.name)}</p>` : ""}
+        ${cell.leader ? `<p class="community-card-meta">Lider: ${escapeHtml(cell.leader)}</p>` : ""}
+        <div class="community-card-actions">
+          <button class="ghost community-cell-view-btn" type="button" data-cell-id="${cell.id}">Ver materiales</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function loadStudyCells() {
+  try {
+    const info = readCommunityInfo();
+    const q = new URLSearchParams({ communityKey: getCommunityKey() });
+    if (info.church) q.set("church", info.church);
+    const data = await communityRequest(`/community/study-cells?${q.toString()}`);
+    communityState.cells = Array.isArray(data.cells) ? data.cells : [];
+    renderStudyCells();
+  } catch {
+    communityState.cells = [];
+    renderStudyCells();
+  }
+}
+
+async function createStudyCell() {
+  const name = communityCellName ? communityCellName.value.trim() : "";
+  const day = communityCellDay ? communityCellDay.value : "";
+  const time = communityCellTime ? communityCellTime.value : "";
+  const locationId = communityCellLocation ? Number(communityCellLocation.value) : 0;
+  if (!name) {
+    setCommunityStatus("Escribe el nombre de la celula.", true);
+    return;
+  }
+  const info = readCommunityInfo();
+  await communityRequest("/community/study-cells", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      communityKey: getCommunityKey(),
+      name,
+      meetingDay: day,
+      meetingTime: time,
+      locationId: locationId || null,
+      church: info.church,
+      city: info.city
+    })
+  });
+  if (communityCellName) communityCellName.value = "";
+  await loadStudyCells();
+  setCommunityStatus("Celula de estudio creada.", false);
+}
+
+function openDeveloperPanel() {
+  if (!developerOverlay) return;
+  developerOverlay.hidden = false;
+  if (developerPanel) developerPanel.hidden = !devAuthenticated;
+  if (developerLoginSection) developerLoginSection.hidden = devAuthenticated;
+}
+
+function closeDeveloperPanel() {
+  if (!developerOverlay) return;
+  developerOverlay.hidden = true;
+}
+
+function developerLogin() {
+  const code = developerCodeInput ? developerCodeInput.value.trim() : "";
+  const validCode = communityState.auth && communityState.auth.developerCode
+    ? communityState.auth.developerCode
+    : "dev2024";
+  if (!code || code !== validCode) {
+    setCommunityStatus("Codigo de desarrollador incorrecto.", true);
+    return;
+  }
+  devAuthenticated = true;
+  if (developerPanel) developerPanel.hidden = false;
+  if (developerLoginSection) developerLoginSection.hidden = true;
+  renderDeveloperChurches();
+  renderDeveloperCells();
+}
+
+function renderDeveloperChurches() {
+  if (!developerChurchList) return;
+  const locations = communityState.locations || [];
+  const churches = [...new Set(locations.map((l) => l.church).filter(Boolean))];
+  if (!churches.length) {
+    developerChurchList.innerHTML = `<p class="community-empty">No hay iglesias registradas.</p>`;
+    return;
+  }
+  developerChurchList.innerHTML = churches.map((church) => `
+    <div class="dev-church-item">
+      <div>
+        <p>${escapeHtml(church)}</p>
+        <small>${locations.filter((l) => l.church === church).length} sedes</small>
+      </div>
+      <span class="dev-badge active">activa</span>
+    </div>
+  `).join("");
+}
+
+function renderDeveloperCells() {
+  if (!developerCellList) return;
+  const cells = communityState.cells || [];
+  if (!cells.length) {
+    developerCellList.innerHTML = `<p class="community-empty">Sin celulas registradas.</p>`;
+    return;
+  }
+  developerCellList.innerHTML = cells.map((cell) => `
+    <div class="dev-church-item">
+      <div>
+        <p>${escapeHtml(cell.name)}</p>
+        <small>${[cell.meetingDay, cell.meetingTime].filter(Boolean).join(" ") || "Sin horario"}</small>
+      </div>
+      <span class="dev-badge active">activa</span>
+    </div>
+  `).join("");
+}
+
+function applyDevRole(role) {
+  devSimulatedRole = role || "";
+  const info = readCommunityInfo();
+  updateCommunityUi(info);
+  const label = role ? `Vista simulada: ${role}` : "Vista real";
+  setCommunityStatus(label, false);
+}
+
+function initScrollObserver() {
+  const toAnimate = document.querySelectorAll(".card, .hero");
+  if (!("IntersectionObserver" in window)) {
+    toAnimate.forEach((el) => el.classList.add("visible"));
+    return;
+  }
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("visible");
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08, rootMargin: "0px 0px -20px 0px" });
+
+  toAnimate.forEach((el, i) => {
+    el.style.transitionDelay = `${i * 60}ms`;
+    observer.observe(el);
+  });
+}
+
+function initFloatingNav() {
+  if (!floatingNav) return;
+  const hero = document.querySelector(".hero");
+  if (!hero) return;
+
+  floatingNav.hidden = false;
+
+  const heroObserver = new IntersectionObserver((entries) => {
+    const [entry] = entries;
+    const scrolledPast = !entry.isIntersecting;
+    floatingNav.classList.toggle("show", scrolledPast);
+  }, { threshold: 0 });
+  heroObserver.observe(hero);
+
+  if (floatSearchBtn) {
+    floatSearchBtn.addEventListener("click", () => {
+      const searchSection = document.querySelector(".search");
+      if (searchSection) {
+        searchSection.scrollIntoView({ behavior: "smooth", block: "start" });
+        setTimeout(() => {
+          const q = document.getElementById("query");
+          if (q) q.focus();
+        }, 400);
+      }
+    });
+  }
+  if (floatCommunityBtn) {
+    floatCommunityBtn.addEventListener("click", () => openCommunity());
+  }
+  if (floatMenuBtn) {
+    floatMenuBtn.addEventListener("click", () => openMenu());
+  }
 }
 
 function applyBigUi(enabled) {
@@ -2892,13 +3130,17 @@ addListener(communityEdit, "click", () => {
   if (communityCity) communityCity.value = info.city || "";
   if (communityChurch) communityChurch.value = info.church || "";
 });
-addListener(communityOpen, "click", () => {
+function openCommunity() {
   const info = readCommunityInfo();
   updateCommunityUi(info);
   if (communityOverlay) communityOverlay.hidden = false;
   loadCommunityData(false).catch((error) => {
     setCommunityStatus(String(error && error.message ? error.message : error), true);
   });
+}
+
+addListener(communityOpen, "click", () => {
+  openCommunity();
 });
 addListener(communityClose, "click", () => {
   if (communityOverlay) communityOverlay.hidden = true;
@@ -3091,12 +3333,73 @@ if (themeCheckboxes.length) {
   });
 }
 
+addListener(communityRefreshCells, "click", () => {
+  loadStudyCells().catch((error) => {
+    setCommunityStatus(String(error && error.message ? error.message : error), true);
+  });
+});
+
+addListener(communityCreateCellBtn, "click", () => {
+  createStudyCell().catch((error) => {
+    setCommunityStatus(String(error && error.message ? error.message : error), true);
+  });
+});
+
+addListener(communityCellsList, "click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const btn = target.closest(".community-cell-view-btn");
+  if (!btn) return;
+  const cellId = btn.getAttribute("data-cell-id");
+  const cell = (communityState.cells || []).find((c) => String(c.id) === cellId);
+  if (cell) {
+    setCommunityStatus(`Celula: ${cell.name}${cell.meetingDay ? ` · ${cell.meetingDay}` : ""}`, false);
+  }
+});
+
+addListener(developerOpen, "click", () => {
+  closeMenu();
+  openDeveloperPanel();
+});
+
+addListener(developerClose, "click", closeDeveloperPanel);
+
+addListener(developerOverlay, "click", (event) => {
+  if (event.target === developerOverlay) closeDeveloperPanel();
+});
+
+addListener(developerLoginBtn, "click", () => {
+  developerLogin();
+});
+
+addListener(developerCodeInput, "keydown", (event) => {
+  if (event.key === "Enter") developerLogin();
+});
+
+addListener(devRefreshChurches, "click", () => {
+  renderDeveloperChurches();
+  renderDeveloperCells();
+});
+
+if (developerPanel) {
+  developerPanel.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const btn = target.closest(".dev-role-btn[data-dev-role]");
+    if (!btn) return;
+    const role = btn.getAttribute("data-dev-role");
+    applyDevRole(role);
+  });
+}
+
 initVersions();
 refreshPushStatus().catch(() => {
   // ignore
 });
 restoreLastQuery();
 initSplash();
+initScrollObserver();
+initFloatingNav();
 const communityInfo = readCommunityInfo();
 updateCommunityUi(communityInfo);
 if (communityApiHint) communityApiHint.textContent = `API: ${getPushServerUrl()}`;
@@ -3560,6 +3863,7 @@ function closeSplash(timer) {
 async function showDailyVerse() {
   let reference = "";
   let verseText = "";
+  let contextText = "";
   try {
     const verses = await fetchJson("daily_verses.json");
     if (!Array.isArray(verses) || !verses.length) {
@@ -3570,17 +3874,19 @@ async function showDailyVerse() {
     const verse = verses[idx];
     reference = sanitizeReferenceString(verse.reference || "");
     verseText = verse.text || "";
+    contextText = verse.context || "";
     if (!verseText && reference) {
       verseText = await fetchVerseByReference(reference, DAILY_VERSION);
     }
     if (verseText || reference) {
-      writeDailyVerseCache({ text: verseText, reference, version: DAILY_VERSION });
+      writeDailyVerseCache({ text: verseText, reference, context: contextText, version: DAILY_VERSION });
     }
   } catch {
     const cached = readDailyVerseCache();
     if (cached) {
       verseText = cached.text || "";
       reference = cached.reference || "";
+      contextText = cached.context || "";
     }
   }
   const name = getUserName();
@@ -3590,9 +3896,13 @@ async function showDailyVerse() {
   } else {
     dailyGreeting.hidden = true;
   }
-  dailyText.textContent = verseText || "No se pudo cargar el versiculo.";
+  if (contextText) {
+    dailyText.innerHTML = `<span>${escapeHtml(verseText || "")}</span><span style="display:block;margin-top:10px;font-size:0.85em;opacity:0.8">${escapeHtml(contextText)}</span>`;
+  } else {
+    dailyText.textContent = verseText || "No se pudo cargar el versiculo.";
+  }
   if (reference) {
-    dailyRef.textContent = `— ${reference} (${DAILY_VERSION})`;
+    dailyRef.textContent = `${reference} (${DAILY_VERSION})`;
   } else {
     dailyRef.textContent = "";
   }
