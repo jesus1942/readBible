@@ -169,7 +169,6 @@ const communityCellDay = document.getElementById("communityCellDay");
 const communityCellTime = document.getElementById("communityCellTime");
 const communityCellLocation = document.getElementById("communityCellLocation");
 const communityCreateCellBtn = document.getElementById("communityCreateCellBtn");
-const floatingNav = document.getElementById("floatingNav");
 const floatSearchBtn = document.getElementById("floatSearchBtn");
 const floatCommunityBtn = document.getElementById("floatCommunityBtn");
 const floatMenuBtn = document.getElementById("floatMenuBtn");
@@ -1065,20 +1064,7 @@ function initScrollObserver() {
   });
 }
 
-function initFloatingNav() {
-  if (!floatingNav) return;
-  const hero = document.querySelector(".hero");
-  if (!hero) return;
-
-  floatingNav.hidden = false;
-
-  const heroObserver = new IntersectionObserver((entries) => {
-    const [entry] = entries;
-    const scrolledPast = !entry.isIntersecting;
-    floatingNav.classList.toggle("show", scrolledPast);
-  }, { threshold: 0 });
-  heroObserver.observe(hero);
-
+function initFooterNav() {
   if (floatSearchBtn) {
     floatSearchBtn.addEventListener("click", () => {
       const searchSection = document.querySelector(".search");
@@ -1087,7 +1073,7 @@ function initFloatingNav() {
         setTimeout(() => {
           const q = document.getElementById("query");
           if (q) q.focus();
-        }, 400);
+        }, 350);
       }
     });
   }
@@ -3472,7 +3458,7 @@ refreshPushStatus().catch(() => {
 restoreLastQuery();
 initSplash();
 initScrollObserver();
-initFloatingNav();
+initFooterNav();
 const communityInfo = readCommunityInfo();
 updateCommunityUi(communityInfo);
 if (communityApiHint) communityApiHint.textContent = `API: ${getPushServerUrl()}`;

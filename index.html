@@ -64,10 +64,17 @@
       </section>
 
       <footer class="footer">
-        <span class="footer-credit">Creada por <a href="https://wa.me/5492804018359?text=Hola%20Jesus%2C%20gracias%20por%20la%20app" target="_blank" rel="noopener">Jesus Olguin</a>.</span>
-        <div class="footer-actions">
-          <a class="whatsapp-button" href="https://wa.me/5492804018359?text=Hola%20Jesus%2C%20gracias%20por%20la%20app" target="_blank" rel="noopener">Enviar saludo</a>
-          <button id="installButton" class="install-button" type="button" hidden>Instalar app</button>
+        <nav class="footer-nav" aria-label="Navegacion rapida">
+          <button id="floatSearchBtn" class="footer-nav-btn" type="button">Buscar</button>
+          <button id="floatCommunityBtn" class="footer-nav-btn" type="button">Comunidad</button>
+          <button id="floatMenuBtn" class="footer-nav-btn" type="button">Menu</button>
+        </nav>
+        <div class="footer-bottom">
+          <span class="footer-credit">Creada por <a href="https://wa.me/5492804018359?text=Hola%20Jesus%2C%20gracias%20por%20la%20app" target="_blank" rel="noopener">Jesus Olguin</a>.</span>
+          <div class="footer-actions">
+            <a class="whatsapp-button" href="https://wa.me/5492804018359?text=Hola%20Jesus%2C%20gracias%20por%20la%20app" target="_blank" rel="noopener">Enviar saludo</a>
+            <button id="installButton" class="install-button" type="button" hidden>Instalar app</button>
+          </div>
         </div>
       </footer>
 
@@ -375,12 +382,6 @@
 
     <button id="highlightBtn" class="highlight-btn" type="button" hidden>Resaltar</button>
 
-    <!-- Floating bottom nav (appears on scroll) -->
-    <nav id="floatingNav" class="floating-nav" hidden aria-label="Navegacion rapida">
-      <button id="floatSearchBtn" class="floating-nav-btn" type="button">Buscar</button>
-      <button id="floatCommunityBtn" class="floating-nav-btn" type="button">Comunidad</button>
-      <button id="floatMenuBtn" class="floating-nav-btn" type="button">Menu</button>
-    </nav>
 
     <!-- Developer panel overlay -->
     <div id="developerOverlay" class="developer-overlay" hidden>
@@ -429,7 +430,7 @@
     ></script>
     <script src="core.js?v=2"></script>
     <script src="net.js?v=2"></script>
-    <script src="app.js?v=82"></script>
+    <script src="app.js?v=83"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;
