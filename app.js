@@ -334,13 +334,28 @@ function updateCommunityUi(info) {
   const isLeader = effectiveRole === "dirigente" || effectiveRole === "colaborador";
   const isDirigente = effectiveRole === "dirigente";
   const canModerateRoles = isDirigente || Boolean(communityState.auth && communityState.auth.roleApprovalMode === "admin_code");
-  if (communityLocationForm) communityLocationForm.hidden = !isLeader;
-  if (communityEventForm) communityEventForm.hidden = !isLeader;
-  if (communityAdminSection) communityAdminSection.hidden = !canModerateRoles;
+  if (communityLocationForm) communityLocationForm.classList.toggle("role-hidden", !isLeader);
+  if (communityEventForm) communityEventForm.classList.toggle("role-hidden", !isLeader);
+  if (communityAdminSection) communityAdminSection.classList.toggle("role-hidden", !canModerateRoles);
+  const moderacionTab = document.getElementById("communityTabModeracion");
+  if (moderacionTab) moderacionTab.classList.toggle("role-hidden", !canModerateRoles);
   if (communityAdminCodeGroup) communityAdminCodeGroup.hidden = isDirigente;
   if (communityApproveRole) communityApproveRole.hidden = true;
-  if (communityStudyCellsSection) communityStudyCellsSection.hidden = false;
-  if (communityCreateCellForm) communityCreateCellForm.hidden = !isDirigente;
+  if (communityCreateCellForm) communityCreateCellForm.classList.toggle("role-hidden", !isDirigente);
+}
+
+let communityActiveTab = "perfil";
+
+function setCommunityTab(tab) {
+  communityActiveTab = tab || "perfil";
+  document.querySelectorAll("#communityTabs .community-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === communityActiveTab);
+  });
+  document.querySelectorAll("[data-community-tab]").forEach((el) => {
+    el.classList.toggle("tab-hidden", el.dataset.communityTab !== communityActiveTab);
+  });
+  const sheet = document.querySelector(".community-sheet");
+  if (sheet) sheet.scrollTop = 0;
 }
 
 function getCommunityKey() {
@@ -3131,13 +3146,23 @@ addListener(communityEdit, "click", () => {
   if (communityChurch) communityChurch.value = info.church || "";
 });
 function openCommunity() {
+  closeMenu();
   const info = readCommunityInfo();
   updateCommunityUi(info);
+  setCommunityTab(communityActiveTab);
   if (communityOverlay) communityOverlay.hidden = false;
   loadCommunityData(false).catch((error) => {
     setCommunityStatus(String(error && error.message ? error.message : error), true);
   });
 }
+
+addListener(document.getElementById("communityTabs"), "click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  const tabBtn = target.closest(".community-tab");
+  if (!tabBtn) return;
+  setCommunityTab(tabBtn.dataset.tab);
+});
 
 addListener(communityOpen, "click", () => {
   openCommunity();

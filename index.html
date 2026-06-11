@@ -213,18 +213,24 @@
       </div>
     </div>
 
-    <div id="communityOverlay" class="sheet-overlay center" hidden>
-      <div class="sheet-card">
+    <div id="communityOverlay" class="sheet-overlay center community-overlay" hidden>
+      <div class="sheet-card community-sheet">
         <div class="side-menu-header">
           <p class="eyebrow">Comunidad</p>
           <button id="communityClose" class="menu-close" aria-label="Cerrar">✕</button>
         </div>
-        <p class="community-note">Perfiles, sedes, eventos, solicitudes de rol y check-in.</p>
-        <p id="communityApiHint" class="community-api-hint"></p>
         <div id="communitySummary" class="community-summary" hidden></div>
         <div id="communityStatus" class="community-status" hidden></div>
 
-        <div id="communityForm" class="community-section">
+        <div id="communityTabs" class="community-tabs" role="tablist">
+          <button class="community-tab active" data-tab="perfil" type="button">Perfil</button>
+          <button class="community-tab" data-tab="sedes" type="button">Sedes</button>
+          <button class="community-tab" data-tab="eventos" type="button">Eventos</button>
+          <button class="community-tab" data-tab="celulas" type="button">Celulas</button>
+          <button class="community-tab role-hidden" id="communityTabModeracion" data-tab="moderacion" type="button">Moderacion</button>
+        </div>
+
+        <div id="communityForm" class="community-section" data-community-tab="perfil">
           <p class="eyebrow">Perfil</p>
           <label for="communityFullName">Nombre</label>
           <input id="communityFullName" type="text" placeholder="Ej: Jesus Olguin" />
@@ -241,11 +247,12 @@
           <button id="communitySave" class="ghost">Guardar perfil</button>
           <button id="communityRequestRole" class="ghost" type="button">Solicitar elevacion</button>
         </div>
-        <button id="communityEdit" class="ghost" hidden>Editar comunidad</button>
+        <button id="communityEdit" class="ghost" data-community-tab="perfil" hidden>Editar comunidad</button>
+        <p id="communityApiHint" class="community-api-hint" data-community-tab="perfil"></p>
 
-        <div id="communityAdminSection" class="community-section" hidden>
+        <div id="communityAdminSection" class="community-section role-hidden" data-community-tab="moderacion">
           <div class="community-section-head">
-            <p class="eyebrow">Moderacion</p>
+            <p class="eyebrow">Solicitudes de rol</p>
             <button id="communityRefreshRequests" class="ghost" type="button">Actualizar</button>
           </div>
           <p class="community-note">Las solicitudes pendientes se aprueban sobre el perfil real del solicitante.</p>
@@ -257,7 +264,7 @@
           <button id="communityApproveRole" class="ghost" type="button" hidden>Aprobar solicitud seleccionada</button>
         </div>
 
-        <div class="community-section">
+        <div class="community-section" data-community-tab="sedes">
           <div class="community-section-head">
             <p class="eyebrow">Sedes</p>
             <button id="communityRefresh" class="ghost" type="button">Actualizar</button>
@@ -265,7 +272,7 @@
           <div id="communityLocationsList" class="community-list"></div>
         </div>
 
-        <div class="community-section">
+        <div class="community-section" data-community-tab="sedes">
           <div class="community-section-head">
             <p class="eyebrow">Mapa cercano</p>
             <button id="communityUseMyLocation" class="ghost" type="button">Usar mi ubicacion</button>
@@ -281,7 +288,7 @@
           <div id="communityNearbyActions" class="community-nearby-actions"></div>
         </div>
 
-        <div id="communityLocationForm" class="community-section">
+        <div id="communityLocationForm" class="community-section role-hidden" data-community-tab="sedes">
           <p class="eyebrow">Nueva sede</p>
           <label for="communityLocationName">Nombre</label>
           <input id="communityLocationName" type="text" placeholder="Ej: HDR Centro" />
@@ -290,7 +297,12 @@
           <button id="communityCreateLocation" class="ghost" type="button">Crear sede</button>
         </div>
 
-        <div id="communityEventForm" class="community-section">
+        <div class="community-section" data-community-tab="eventos">
+          <p class="eyebrow">Eventos</p>
+          <div id="communityEventsList" class="community-list"></div>
+        </div>
+
+        <div id="communityEventForm" class="community-section role-hidden" data-community-tab="eventos">
           <p class="eyebrow">Nuevo evento</p>
           <label for="communityEventLocation">Sede</label>
           <select id="communityEventLocation"></select>
@@ -301,12 +313,7 @@
           <button id="communityCreateEvent" class="ghost" type="button">Crear evento</button>
         </div>
 
-        <div class="community-section">
-          <p class="eyebrow">Eventos</p>
-          <div id="communityEventsList" class="community-list"></div>
-        </div>
-
-        <div id="communityStudyCellsSection" class="community-section">
+        <div id="communityStudyCellsSection" class="community-section" data-community-tab="celulas">
           <div class="community-section-head">
             <p class="eyebrow">Celulas de estudio</p>
             <button id="communityRefreshCells" class="ghost" type="button">Actualizar</button>
@@ -314,7 +321,7 @@
           <div id="communityCellsList" class="community-list"></div>
         </div>
 
-        <div id="communityCreateCellForm" class="community-section" hidden>
+        <div id="communityCreateCellForm" class="community-section role-hidden" data-community-tab="celulas">
           <p class="eyebrow">Nueva celula</p>
           <label for="communityCellName">Nombre</label>
           <input id="communityCellName" type="text" placeholder="Ej: Celula de jovenes" />
@@ -419,7 +426,7 @@
     ></script>
     <script src="core.js?v=2"></script>
     <script src="net.js?v=2"></script>
-    <script src="app.js?v=80"></script>
+    <script src="app.js?v=81"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;

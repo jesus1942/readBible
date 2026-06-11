@@ -1,11 +1,11 @@
-const CACHE_NAME = "bibleapp-pwa-v102";
+const CACHE_NAME = "bibleapp-pwa-v103";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./core.js?v=2",
   "./net.js?v=2",
-  "./app.js?v=80",
+  "./app.js?v=81",
   "./daily_verses.json",
   "./efemerides.json",
   "./manifest.json",

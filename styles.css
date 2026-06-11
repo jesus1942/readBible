@@ -1412,6 +1412,72 @@ button:active {
   margin: 0;
 }
 
+/* --- Community tabs --- */
+.tab-hidden,
+.role-hidden {
+  display: none !important;
+}
+
+/* Community overlay must layer above the side menu (1300) */
+.community-overlay {
+  z-index: 1350;
+}
+
+.community-sheet {
+  width: min(560px, 100%);
+  max-height: 90vh;
+}
+
+.community-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(26, 18, 12, 0.06);
+}
+
+.community-tab {
+  flex: 1;
+  min-width: fit-content;
+  border: none;
+  background: transparent;
+  color: #5a432c;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  box-shadow: none;
+  filter: none;
+}
+
+.community-tab.active {
+  background: #1a120c;
+  color: #fff7e6;
+}
+
+@media (max-width: 600px) {
+  .community-sheet {
+    width: 100%;
+    max-height: 94vh;
+    border-radius: 18px 18px 0 0;
+    align-self: end;
+  }
+
+  .community-overlay.sheet-overlay.center {
+    align-items: end;
+    padding: 0;
+  }
+
+  .community-tab {
+    font-size: 11px;
+    padding: 7px 8px;
+  }
+}
+
 
 .ui-large .picker-item {
   font-size: 15px;
