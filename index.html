@@ -7,16 +7,16 @@
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180" />
-    <title>BibleApp PWA</title>
+    <title>Lectura Viva</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <!-- SVG filter for hand-drawn button edges -->
+    <!-- SVG filter for hand-drawn button edges (scale reducido a 0.8 para que sea sutil) -->
     <svg width="0" height="0" style="position:absolute;overflow:hidden" aria-hidden="true">
       <defs>
         <filter id="sketch">
-          <feTurbulence type="fractalNoise" baseFrequency="0.022 0.72" numOctaves="3" seed="7" result="noise"/>
-          <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.6" xChannelSelector="R" yChannelSelector="G"/>
+          <feTurbulence type="fractalNoise" baseFrequency="0.025 0.65" numOctaves="3" seed="7" result="noise"/>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="0.8" xChannelSelector="R" yChannelSelector="G"/>
         </filter>
       </defs>
     </svg>
@@ -24,7 +24,7 @@
     <main class="app">
       <header class="hero">
         <div>
-          <p class="eyebrow">BibleApp</p>
+          <p class="eyebrow">Lectura Viva</p>
           <h1>Versiculos vivos, lectura plena.</h1>
           <p class="subtitle">Busqueda rapida, lectura plena y referencias destacadas.</p>
         </div>
@@ -78,7 +78,10 @@
         <p id="zenText"></p>
         <p id="zenRef"></p>
       </div>
-      <button id="zenClose" class="zen-close" aria-label="Cerrar">✕</button>
+      <div class="zen-controls">
+        <button id="zenProject" class="zen-ctrl-btn" aria-label="Proyectar en pantalla grande">Proyectar</button>
+        <button id="zenClose" class="btn-close zen-close" aria-label="Cerrar">✕</button>
+      </div>
     </div>
 
     <div id="splash" class="splash" hidden>
@@ -91,7 +94,7 @@
         <p class="daily-title">Versiculo del dia</p>
         <p id="dailyText" class="daily-text"></p>
         <p id="dailyRef" class="daily-ref"></p>
-        <button id="dailyClose" class="daily-close" aria-label="Cerrar">✕</button>
+        <button id="dailyClose" class="btn-close daily-close" aria-label="Cerrar">✕</button>
       </div>
     </div>
 
@@ -141,7 +144,7 @@
       <div class="side-menu-panel" role="dialog" aria-label="Menu">
         <div class="side-menu-header">
           <p class="eyebrow">Menu</p>
-          <button id="menuClose" class="menu-close" aria-label="Cerrar menu">✕</button>
+          <button id="menuClose" class="btn-close" aria-label="Cerrar menu">✕</button>
         </div>
         <div class="side-menu-about">
           <p class="eyebrow">Acciones</p>
@@ -217,7 +220,7 @@
       <div class="sheet-card community-sheet">
         <div class="side-menu-header">
           <p class="eyebrow">Comunidad</p>
-          <button id="communityClose" class="menu-close" aria-label="Cerrar">✕</button>
+          <button id="communityClose" class="btn-close" aria-label="Cerrar">✕</button>
         </div>
         <div id="communitySummary" class="community-summary" hidden></div>
         <div id="communityStatus" class="community-status" hidden></div>
@@ -349,7 +352,7 @@
       <div class="picker-panel" role="dialog" aria-label="Seleccionar referencia">
         <div class="picker-header">
           <p class="eyebrow">Seleccionar</p>
-          <button id="pickerClose" class="menu-close" aria-label="Cerrar">✕</button>
+          <button id="pickerClose" class="btn-close" aria-label="Cerrar">✕</button>
         </div>
         <div class="picker-testament" role="group" aria-label="Testamento">
           <button id="pickerOld" class="picker-tab active" type="button" aria-pressed="true">Antiguo</button>
@@ -384,7 +387,7 @@
       <div class="sheet-card">
         <div class="side-menu-header">
           <p class="eyebrow">Panel desarrollador</p>
-          <button id="developerClose" class="menu-close" aria-label="Cerrar">&#10005;</button>
+          <button id="developerClose" class="btn-close" aria-label="Cerrar">&#10005;</button>
         </div>
         <div id="developerLoginSection" class="community-section">
           <p class="eyebrow">Acceso</p>
@@ -426,7 +429,7 @@
     ></script>
     <script src="core.js?v=2"></script>
     <script src="net.js?v=2"></script>
-    <script src="app.js?v=81"></script>
+    <script src="app.js?v=82"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;

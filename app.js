@@ -1,6 +1,7 @@
 const versions = [
-  "RVR1960", "NVI", "LBLA", "NRSV", "DHH", "TLA",
-  "NBD", "BLPH", "JBS", "PDT", "NTV", "RVR2000", "NBLA",
+  "RVR1960", "RVC", "NVI", "NBLA", "LBLA", "NTV",
+  "NBLH", "DHH", "TLA", "PDT", "BLPH", "NBD",
+  "RVR2000", "JBS", "NRSV",
   "ARA", "ARC", "NVI-PT", "NTLH", "NVT", "TB"
 ];
 
@@ -2179,6 +2180,52 @@ function closeZen() {
   isZenOpen = false;
 }
 
+function openProjection() {
+  const verseText = document.getElementById("zenText")?.textContent
+    || document.getElementById("verseText")?.textContent || "";
+  const refText = document.getElementById("zenRef")?.textContent
+    || document.getElementById("reference")?.textContent || "";
+  if (!verseText) return;
+
+  const safe = (str) => str
+    .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+
+  const html = `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${safe(refText)}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{width:100%;height:100%;background:#1a120c;
+      font-family:"Cormorant Garamond","Times New Roman",serif;
+      display:grid;place-items:center;padding:6vw}
+    .verse{font-size:clamp(28px,4.5vw,80px);line-height:1.45;
+      text-align:center;color:#fff7e6;max-width:960px}
+    .ref{color:#f39c12;font-style:italic;font-size:clamp(16px,2.2vw,36px);
+      margin-top:28px;text-align:center;letter-spacing:0.04em}
+  </style>
+</head>
+<body>
+  <div>
+    <p class="verse">${safe(verseText)}</p>
+    <p class="ref">${safe(refText)}</p>
+  </div>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank",
+    "menubar=no,toolbar=no,location=no,status=no,scrollbars=no");
+  if (!win) {
+    alert("El navegador bloqueó la ventana. Permitir pop-ups para esta página.");
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
+}
+
 function buildStudyKey(parsed, version) {
   return `study:${buildCacheKey(parsed, version)}`;
 }
@@ -2819,6 +2866,7 @@ addListener(document.getElementById("nextBtn"), "click", goNext);
 addListener(document.getElementById("zenBtn"), "click", openZen);
 addListener(chapterBtn, "click", fetchChapter);
 addListener(zenClose, "click", closeZen);
+addListener(document.getElementById("zenProject"), "click", openProjection);
 addListener(mpButton, "click", (event) => {
   event.preventDefault();
   openMercadoPagoTransfer();
