@@ -2226,13 +2226,14 @@ function closeZen() {
 }
 
 function openProjection() {
-  const verseText = document.getElementById("zenText")?.textContent
+  const verseText = (isZenOpen ? zenText?.textContent : null)
     || document.getElementById("verseText")?.textContent || "";
-  const refText = document.getElementById("zenRef")?.textContent
+  const rawRef = (isZenOpen ? zenRef?.textContent : null)
     || document.getElementById("reference")?.textContent || "";
+  const refText = rawRef.replace(/^[—\s]+/, "");
   if (!verseText) return;
 
-  const safe = (str) => str
+  const safe = (s) => String(s)
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 
@@ -2246,11 +2247,14 @@ function openProjection() {
     *{box-sizing:border-box;margin:0;padding:0}
     html,body{width:100%;height:100%;background:#1a120c;
       font-family:"Cormorant Garamond","Times New Roman",serif;
-      display:grid;place-items:center;padding:6vw}
+      display:grid;place-items:center;padding:6vw;cursor:none}
     .verse{font-size:clamp(28px,4.5vw,80px);line-height:1.45;
       text-align:center;color:#fff7e6;max-width:960px}
     .ref{color:#f39c12;font-style:italic;font-size:clamp(16px,2.2vw,36px);
       margin-top:28px;text-align:center;letter-spacing:0.04em}
+    .hint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
+      color:rgba(255,247,230,0.25);font-size:13px;letter-spacing:0.06em;
+      text-transform:uppercase;pointer-events:none}
   </style>
 </head>
 <body>
@@ -2258,17 +2262,36 @@ function openProjection() {
     <p class="verse">${safe(verseText)}</p>
     <p class="ref">${safe(refText)}</p>
   </div>
+  <p class="hint">Arrastra esta ventana al proyector o TV</p>
+  <script>setTimeout(()=>document.querySelector('.hint').style.opacity='0',4000)<\/script>
 </body>
 </html>`;
 
   const win = window.open("", "_blank",
-    "menubar=no,toolbar=no,location=no,status=no,scrollbars=no");
+    "menubar=no,toolbar=no,location=no,status=no,scrollbars=no,width=1280,height=720");
   if (!win) {
-    alert("El navegador bloqueó la ventana. Permitir pop-ups para esta página.");
+    showZenHint("Permitir pop-ups en el navegador para proyectar");
     return;
   }
   win.document.write(html);
   win.document.close();
+}
+
+function showZenHint(msg) {
+  let hint = document.getElementById("zenHint");
+  if (!hint) {
+    hint = document.createElement("p");
+    hint.id = "zenHint";
+    hint.style.cssText = "position:absolute;bottom:20px;left:50%;transform:translateX(-50%);"
+      + "color:rgba(255,247,230,0.6);font-size:13px;letter-spacing:0.05em;"
+      + "text-transform:uppercase;text-align:center;pointer-events:none;"
+      + "transition:opacity 400ms;white-space:nowrap;margin:0";
+    zenOverlay.appendChild(hint);
+  }
+  hint.textContent = msg;
+  hint.style.opacity = "1";
+  clearTimeout(hint._timer);
+  hint._timer = setTimeout(() => { hint.style.opacity = "0"; }, 3500);
 }
 
 function buildStudyKey(parsed, version) {
@@ -2929,12 +2952,20 @@ zenOverlay.addEventListener("touchstart", (event) => {
 }, { passive: true });
 
 zenOverlay.addEventListener("touchend", (event) => {
-  const dx = event.changedTouches[0].clientX - touchStartX;
-  const dy = event.changedTouches[0].clientY - touchStartY;
+  const touch = event.changedTouches[0];
+  const dx = touch.clientX - touchStartX;
+  const dy = touch.clientY - touchStartY;
+
+  // Cierre: toque sobre el boton de cerrar o el de proyeccion
+  const tapped = document.elementFromPoint(touch.clientX, touch.clientY);
+  if (tapped && tapped.closest(".zen-controls")) {
+    const btn = tapped.closest("button");
+    if (btn && btn.id === "zenClose") { closeZen(); return; }
+    if (btn && btn.id === "zenProject") { openProjection(); return; }
+  }
+
   if (Math.abs(dx) < 30 || Math.abs(dx) < Math.abs(dy)) {
-    if (dy < -80) {
-      shareVerseAsPng();
-    }
+    if (dy < -80) shareVerseAsPng();
     return;
   }
   if (dx > 0) {
