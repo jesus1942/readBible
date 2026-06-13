@@ -1,0 +1,13 @@
+{
+  "appId": "com.lecturaviva.app",
+  "appName": "Lectura Viva",
+  "webDir": "www",
+  "backgroundColor": "#0f1412",
+  "android": {
+    "backgroundColor": "#0f1412"
+  },
+  "ios": {
+    "backgroundColor": "#0f1412",
+    "contentInset": "always"
+  }
+}

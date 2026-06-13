@@ -51,7 +51,9 @@ app.use((req, res, next) => {
     : [
       "https://jesus1942.github.io",
       "http://localhost:8000",
-      "http://127.0.0.1:8000"
+      "http://127.0.0.1:8000",
+      "https://localhost",
+      "capacitor://localhost"
     ];
   if (origin && allowlist.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);

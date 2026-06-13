@@ -12,6 +12,11 @@ node_modules/
 playwright-report/
 test-results/
 .codex
+
+# Capacitor: carpeta web generada y copias sincronizadas dentro de las apps
+www/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
 package-lock.json
 playwright.config.mjs
 tests/
