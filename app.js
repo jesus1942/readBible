@@ -252,6 +252,10 @@ let communityState = {
 };
 let devSimulatedRole = "";
 let devAuthenticated = false;
+let isProjOpen = false;
+let projHideTimer = 0;
+let projTouchStartX = 0;
+let projTouchStartY = 0;
 let pickerState = {
   bookIndex: 0,
   chapter: 1,
@@ -1988,6 +1992,10 @@ function showResult(text, reference) {
     updateHighlightedViews();
     zenRef.textContent = `— ${reference}`;
   }
+  if (isProjOpen && projTextEl && projRefEl) {
+    projTextEl.textContent = text;
+    projRefEl.textContent = `— ${reference}`;
+  }
   persistLastQuery();
   refreshStudyDot();
   refreshBookmarkButton();
@@ -2216,6 +2224,11 @@ function closeZen() {
   isZenOpen = false;
 }
 
+const projectionOverlay = document.getElementById("projectionOverlay");
+const projTextEl = document.getElementById("projText");
+const projRefEl = document.getElementById("projRef");
+const projControlsEl = document.getElementById("projControls");
+
 function openProjection() {
   const verseText = (isZenOpen ? zenText?.textContent : null)
     || document.getElementById("verseText")?.textContent || "";
@@ -2224,58 +2237,34 @@ function openProjection() {
   const refText = rawRef.replace(/^[—\s]+/, "");
   if (!verseText) return;
 
-  const safe = (s) => String(s)
-    .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+  if (projTextEl) projTextEl.textContent = verseText;
+  if (projRefEl) projRefEl.textContent = `— ${refText}`;
+  if (projectionOverlay) projectionOverlay.hidden = false;
+  isProjOpen = true;
+  scheduleProjHide();
+}
 
-  const html = `<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>${safe(refText)}</title>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    html,body{width:100%;height:100%;background:#1a120c;
-      font-family:"Cormorant Garamond","Times New Roman",serif;
-      display:grid;place-items:center;padding:6vw;cursor:none}
-    .verse{font-size:clamp(28px,4.5vw,80px);line-height:1.45;
-      text-align:center;color:#fff7e6;max-width:960px}
-    .ref{color:#f39c12;font-style:italic;font-size:clamp(16px,2.2vw,36px);
-      margin-top:28px;text-align:center;letter-spacing:0.04em}
-    .hint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
-      color:rgba(255,247,230,0.25);font-size:13px;letter-spacing:0.06em;
-      text-transform:uppercase;pointer-events:none}
-  </style>
-</head>
-<body>
-  <div>
-    <p class="verse">${safe(verseText)}</p>
-    <p class="ref">${safe(refText)}</p>
-  </div>
-  <p class="hint">Arrastra esta ventana al proyector o TV</p>
-  <script>setTimeout(()=>document.querySelector('.hint').style.opacity='0',4000)<\/script>
-</body>
-</html>`;
+function closeProjection() {
+  if (projectionOverlay) projectionOverlay.hidden = true;
+  isProjOpen = false;
+  clearTimeout(projHideTimer);
+}
 
-  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-  if (isMobile) {
-    // En movil, abrir en la misma pestana como pagina de presentacion
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    return;
-  }
+function scheduleProjHide() {
+  clearTimeout(projHideTimer);
+  if (projControlsEl) projControlsEl.classList.remove("fade-out");
+  projHideTimer = setTimeout(() => {
+    if (projControlsEl) projControlsEl.classList.add("fade-out");
+  }, 3500);
+}
 
-  const win = window.open("", "_blank",
-    "menubar=no,toolbar=no,location=no,status=no,scrollbars=no,width=1280,height=720");
-  if (!win) {
-    showZenHint("Permitir pop-ups en el navegador para proyectar");
-    return;
-  }
-  win.document.write(html);
-  win.document.close();
+function updateProjectionText() {
+  if (!isProjOpen) return;
+  const verseText = document.getElementById("verseText")?.textContent || "";
+  const rawRef = document.getElementById("reference")?.textContent || "";
+  const refText = rawRef.replace(/^[—\s]+/, "");
+  if (projTextEl) projTextEl.textContent = verseText;
+  if (projRefEl) projRefEl.textContent = `— ${refText}`;
 }
 
 function showZenHint(msg) {
@@ -2978,7 +2967,52 @@ zenOverlay.addEventListener("touchend", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key === "ArrowUp") goPrev();
   if (event.key === "ArrowDown") goNext();
+  if (isProjOpen && event.key === "Escape") closeProjection();
+  if (isProjOpen && event.key === "ArrowLeft") goPrev();
+  if (isProjOpen && event.key === "ArrowRight") goNext();
 });
+
+// Proyeccion — controles
+if (projectionOverlay) {
+  const projCloseBtn = document.getElementById("projClose");
+  const projPrevBtn = document.getElementById("projPrev");
+  const projNextBtn = document.getElementById("projNext");
+
+  [projCloseBtn, projPrevBtn, projNextBtn].forEach((btn) => {
+    if (!btn) return;
+    btn.addEventListener("touchend", (e) => {
+      e.stopPropagation();
+      scheduleProjHide();
+      if (btn === projCloseBtn) closeProjection();
+      if (btn === projPrevBtn) goPrev();
+      if (btn === projNextBtn) goNext();
+    });
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      scheduleProjHide();
+      if (btn === projCloseBtn) closeProjection();
+      if (btn === projPrevBtn) goPrev();
+      if (btn === projNextBtn) goNext();
+    });
+  });
+
+  projectionOverlay.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    projTouchStartX = e.touches[0].clientX;
+    projTouchStartY = e.touches[0].clientY;
+    scheduleProjHide();
+  }, { passive: true });
+
+  projectionOverlay.addEventListener("touchend", (e) => {
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - projTouchStartX;
+    const dy = touch.clientY - projTouchStartY;
+    if (Math.abs(dx) < 30 || Math.abs(dx) < Math.abs(dy)) return;
+    if (dx > 0) goPrev(); else goNext();
+  }, { passive: true });
+
+  projectionOverlay.addEventListener("click", scheduleProjHide);
+}
 
 function addListener(el, event, handler, options) {
   if (!el) return;

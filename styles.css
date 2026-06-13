@@ -418,6 +418,98 @@ button:active {
   height: 34px;
 }
 
+/* ===== PROYECCION ===== */
+.proj-overlay {
+  position: fixed;
+  inset: 0;
+  background: #110c06;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8vw;
+  touch-action: pan-x;
+}
+
+.proj-overlay[hidden] { display: none !important; }
+
+.proj-text {
+  font-family: "Cormorant Garamond", "Times New Roman", serif;
+  font-size: clamp(26px, 4.5vw, 88px);
+  line-height: 1.5;
+  text-align: center;
+  color: #fff7e6;
+  max-width: 920px;
+}
+
+.proj-ref {
+  font-family: "Cormorant Garamond", "Times New Roman", serif;
+  color: #f39c12;
+  font-style: italic;
+  font-size: clamp(15px, 2vw, 40px);
+  margin-top: 28px;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+.proj-controls {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  transition: opacity 500ms ease;
+}
+
+.proj-controls.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.proj-ctrl-btn {
+  background: rgba(255, 247, 230, 0.08);
+  border: 1px solid rgba(255, 247, 230, 0.18);
+  color: rgba(255, 247, 230, 0.8);
+  border-radius: 999px;
+  padding: 11px 24px;
+  font-size: 24px;
+  font-family: inherit;
+  cursor: pointer;
+  filter: none;
+  line-height: 1;
+  min-width: 52px;
+  transition: background 120ms;
+}
+
+.proj-ctrl-btn:active { background: rgba(255, 247, 230, 0.18); }
+
+.proj-ctrl-exit {
+  font-size: 12px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 11px 20px;
+  font-weight: 700;
+}
+
+.proj-hint {
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 247, 230, 0.18);
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 500ms ease;
+}
+
+/* ===== FIN PROYECCION ===== */
+
 .splash {
   position: fixed;
   inset: 0;

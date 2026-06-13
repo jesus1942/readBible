@@ -92,6 +92,17 @@
       <p class="zen-swipe-hint">desliza izquierda / derecha para navegar</p>
     </div>
 
+    <div id="projectionOverlay" class="proj-overlay" hidden>
+      <p id="projText" class="proj-text"></p>
+      <p id="projRef" class="proj-ref"></p>
+      <div class="proj-controls" id="projControls">
+        <button id="projPrev" class="proj-ctrl-btn" type="button" aria-label="Anterior">&#8249;</button>
+        <button id="projClose" class="proj-ctrl-btn proj-ctrl-exit" type="button">Salir</button>
+        <button id="projNext" class="proj-ctrl-btn" type="button" aria-label="Siguiente">&#8250;</button>
+      </div>
+      <p class="proj-hint">Usa duplicacion de pantalla para proyectar al TV o proyector</p>
+    </div>
+
     <div id="splash" class="splash" hidden>
       <canvas id="splashCanvas" class="splash-canvas" aria-hidden="true"></canvas>
     </div>
@@ -432,7 +443,7 @@
     ></script>
     <script src="core.js?v=2"></script>
     <script src="net.js?v=2"></script>
-    <script src="app.js?v=87"></script>
+    <script src="app.js?v=88"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;
