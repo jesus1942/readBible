@@ -1224,6 +1224,54 @@ function initFooterNav() {
   }
 }
 
+function initFooterFlame() {
+  const canvas = document.querySelector(".footer-flame-canvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const COLORS = ["#f39c12", "#c0641a", "#7a1a0a", "#f5c96b", "#e07828", "#a03010", "#6b2008"];
+  const particles = [];
+
+  function resize() {
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+  }
+  resize();
+  window.addEventListener("resize", resize);
+
+  function spawn() {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: canvas.height + 2,
+      vx: (Math.random() - 0.5) * 0.45,
+      vy: -(0.45 + Math.random() * 0.75),
+      r: 0.7 + Math.random() * 2.2,
+      life: 0.65 + Math.random() * 0.35,
+      decay: 0.006 + Math.random() * 0.007,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)]
+    });
+  }
+
+  function frame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    while (particles.length < 95) spawn();
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx + Math.sin(p.y * 0.06 + i) * 0.12;
+      p.y += p.vy;
+      p.life -= p.decay;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      ctx.globalAlpha = p.life * p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(frame);
+  }
+  frame();
+}
+
 function applyBigUi(enabled) {
   document.body.classList.toggle("ui-large", enabled);
   if (bigUiToggle) bigUiToggle.checked = enabled;
@@ -3750,6 +3798,7 @@ restoreLastQuery();
 initSplash();
 initScrollObserver();
 initFooterNav();
+initFooterFlame();
 const communityInfo = readCommunityInfo();
 updateCommunityUi(communityInfo);
 if (communityApiHint) communityApiHint.textContent = `API: ${getPushServerUrl()}`;
