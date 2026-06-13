@@ -2012,6 +2012,7 @@ async function goPrev() {
   const parsed = parseReference(queryInput.value);
   if (!parsed) return;
   const book = parsed.book.replace(/^(\d)([A-Za-zÁÉÍÓÚÜÑáéíóúüñ])/, "$1 $2");
+  const version = versionSelect.value;
 
   if (parsed.verseStart > 1) {
     queryInput.value = `${book} ${parsed.chapter}:${parsed.verseStart - 1}`;
@@ -2020,15 +2021,10 @@ async function goPrev() {
   }
 
   if (parsed.chapter > 1) {
-    queryInput.value = `${book} ${parsed.chapter - 1}:200`;
-    const ok = await fetchVerse();
-    if (!ok) {
-      for (let v = 150; v >= 1; v--) {
-        queryInput.value = `${book} ${parsed.chapter - 1}:${v}`;
-        const found = await fetchVerse();
-        if (found) return;
-      }
-    }
+    const prevChapter = parsed.chapter - 1;
+    const lastVerse = await fetchVerseCount(book, prevChapter, version);
+    queryInput.value = `${book} ${prevChapter}:${lastVerse || 1}`;
+    await fetchVerse();
     return;
   }
 
@@ -2036,15 +2032,10 @@ async function goPrev() {
   if (bookIndex > 0) {
     const prevBook = BOOKS[bookIndex - 1];
     await showZenBookTransition(prevBook);
-    queryInput.value = `${prevBook} 999:200`;
-    const ok = await fetchVerse();
-    if (!ok) {
-      for (let c = 50; c >= 1; c--) {
-        queryInput.value = `${prevBook} ${c}:1`;
-        const found = await fetchVerse();
-        if (found) return;
-      }
-    }
+    const lastChapter = BOOK_CHAPTERS[prevBook] || 1;
+    const lastVerse = await fetchVerseCount(prevBook, lastChapter, version);
+    queryInput.value = `${prevBook} ${lastChapter}:${lastVerse || 1}`;
+    await fetchVerse();
   }
 }
 
