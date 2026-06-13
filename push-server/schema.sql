@@ -21,6 +21,7 @@ CREATE INDEX IF NOT EXISTS push_subscriptions_church_idx ON push_subscriptions (
 CREATE TABLE IF NOT EXISTS community_users (
   id BIGSERIAL PRIMARY KEY,
   community_key TEXT UNIQUE,
+  community_secret TEXT,
   phone_e164 TEXT UNIQUE,
   email TEXT UNIQUE,
   full_name TEXT NOT NULL,

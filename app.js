@@ -391,6 +391,31 @@ function getCommunityKey() {
   return generated;
 }
 
+// Secreto por usuario: prueba de identidad que viaja en cada accion.
+// Vive en su propia clave para no perderse cuando se reescribe communityInfo.
+function getCommunitySecret() {
+  try {
+    const existing = localStorage.getItem("communitySecret");
+    if (existing) return existing;
+  } catch {
+    // ignore
+  }
+  let secret;
+  try {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    secret = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    secret = `s-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+  }
+  try {
+    localStorage.setItem("communitySecret", secret);
+  } catch {
+    // ignore
+  }
+  return secret;
+}
+
 function setCommunityStatus(message, isError) {
   if (!communityStatus) return;
   const text = String(message || "").trim();
@@ -569,10 +594,30 @@ async function useCommunityViewerLocation() {
 }
 
 async function communityRequest(path, options) {
-  const url = `${getPushServerUrl()}${path}`;
+  const opts = { ...(options || {}) };
+  const secret = getCommunitySecret();
+  // Se manda en cuerpo (POST) o query (GET), no en header, para no romper
+  // CORS si el backend viejo todavia no tiene el redeploy.
+  let finalPath = path;
+  if (secret) {
+    if (typeof opts.body === "string") {
+      try {
+        const parsed = JSON.parse(opts.body);
+        if (parsed && typeof parsed === "object" && parsed.communitySecret == null) {
+          parsed.communitySecret = secret;
+          opts.body = JSON.stringify(parsed);
+        }
+      } catch {
+        // cuerpo no-JSON, se deja igual
+      }
+    } else if (!opts.method || String(opts.method).toUpperCase() === "GET") {
+      finalPath += `${finalPath.includes("?") ? "&" : "?"}communitySecret=${encodeURIComponent(secret)}`;
+    }
+  }
+  const url = `${getPushServerUrl()}${finalPath}`;
   let response;
   try {
-    response = await fetch(url, options);
+    response = await fetch(url, opts);
   } catch (error) {
     throw new Error(`No pude conectar con la API en ${getPushServerUrl()}.`);
   }
@@ -1121,13 +1166,20 @@ function closeDeveloperPanel() {
   developerOverlay.hidden = true;
 }
 
-function developerLogin() {
+async function developerLogin() {
   const code = developerCodeInput ? developerCodeInput.value.trim() : "";
-  const validCode = communityState.auth && communityState.auth.developerCode
-    ? communityState.auth.developerCode
-    : "dev2024";
-  if (!code || code !== validCode) {
-    setCommunityStatus("Codigo de desarrollador incorrecto.", true);
+  if (!code) {
+    setCommunityStatus("Ingresa el codigo de desarrollador.", true);
+    return;
+  }
+  try {
+    await communityRequest("/community/developer-auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code })
+    });
+  } catch (error) {
+    setCommunityStatus(error.message || "Codigo de desarrollador incorrecto.", true);
     return;
   }
   devAuthenticated = true;

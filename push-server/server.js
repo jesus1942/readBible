@@ -4,6 +4,7 @@ import webpush from "web-push";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import crypto from "node:crypto";
 import * as cheerio from "cheerio";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -17,6 +18,7 @@ let VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY ? process.env.VAPID_PUBLIC_K
 let VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ? process.env.VAPID_PRIVATE_KEY.trim() : "";
 const CRON_SECRET = process.env.CRON_SECRET || "";
 const COMMUNITY_ADMIN_CODE = process.env.COMMUNITY_ADMIN_CODE || (IS_LOCAL_DEV ? "amen123" : "");
+const COMMUNITY_DEVELOPER_CODE = process.env.COMMUNITY_DEVELOPER_CODE || (IS_LOCAL_DEV ? "dev2024" : "");
 const APP_URL = process.env.APP_URL || "https://jesus1942.github.io/readBible/";
 const DAILY_VERSION = process.env.DAILY_VERSION || "RVR1960";
 const CRON_WINDOW_MINUTES = Number(process.env.CRON_WINDOW_MINUTES || 15);
@@ -60,7 +62,7 @@ app.use((req, res, next) => {
     res.setHeader("Vary", "Origin");
   }
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Cron-Secret");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Cron-Secret, X-Community-Secret");
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
@@ -142,6 +144,7 @@ async function ensureSchema() {
     );
   `);
   await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS community_key TEXT;`);
+  await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS community_secret TEXT;`);
   await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS requested_role TEXT;`);
   await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ;`);
   await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS address TEXT;`);
@@ -718,6 +721,46 @@ function requireDirigenteRole(user) {
   }
 }
 
+function getCommunitySecret(req) {
+  const fromHeader = req.headers && req.headers["x-community-secret"];
+  const fromBody = req.body && req.body.communitySecret;
+  const fromQuery = req.query && req.query.communitySecret;
+  return normalizeCommunityText(fromHeader || fromBody || fromQuery);
+}
+
+// Verifica identidad real: communityKey + communitySecret deben coincidir.
+// Trust-on-first-use: una cuenta sin secreto (creada antes de esta version)
+// adopta el primer secreto que se presente y a partir de ahi queda fijo.
+async function requireCommunityAuth(client, communityKey, communitySecret) {
+  const user = await requireCommunityUser(client, communityKey);
+  if (!communitySecret) {
+    const error = new Error("missing communitySecret");
+    error.status = 401;
+    throw error;
+  }
+  if (!user.community_secret) {
+    await client.query(
+      `UPDATE community_users SET community_secret = $2, updated_at = NOW() WHERE id = $1`,
+      [user.id, communitySecret]
+    );
+    user.community_secret = communitySecret;
+    return user;
+  }
+  if (user.community_secret !== communitySecret) {
+    const error = new Error("invalid credentials");
+    error.status = 401;
+    throw error;
+  }
+  return user;
+}
+
+// Como serializeCommunityUser pero sin exponer la credential de otros usuarios.
+function serializeCommunityMember(row) {
+  const data = serializeCommunityUser(row);
+  if (data) delete data.communityKey;
+  return data;
+}
+
 async function listCommunityLocations(client) {
   const { rows } = await client.query(
     `SELECT id, slug, name, description, address, city, church, latitude, longitude, is_active
@@ -957,13 +1000,24 @@ app.get("/community/bootstrap", async (req, res) => {
   }
 });
 
+app.post("/community/developer-auth", (req, res) => {
+  const code = normalizeCommunityText(req.body && req.body.code);
+  if (!COMMUNITY_DEVELOPER_CODE) {
+    return res.status(403).json({ error: "developer mode disabled" });
+  }
+  if (!code || code !== COMMUNITY_DEVELOPER_CODE) {
+    return res.status(401).json({ error: "invalid developer code" });
+  }
+  return res.json({ ok: true });
+});
+
 app.get("/community/role-requests", async (req, res) => {
   const communityKey = normalizeCommunityText(req.query.communityKey);
   const adminCode = normalizeCommunityText(req.query.adminCode);
   if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
   const client = await pool.connect();
   try {
-    const user = await requireCommunityUser(client, communityKey);
+    const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
     const canListByRole = user.role === "dirigente";
     const canListByCode = Boolean(COMMUNITY_ADMIN_CODE && adminCode === COMMUNITY_ADMIN_CODE);
     if (!canListByRole && !canListByCode) {
@@ -980,6 +1034,7 @@ app.get("/community/role-requests", async (req, res) => {
 
 app.post("/community/profile", async (req, res) => {
   const communityKey = normalizeCommunityText(req.body && req.body.communityKey);
+  const communitySecret = getCommunitySecret(req);
   const fullName = normalizeCommunityText(req.body && req.body.fullName);
   const displayName = normalizeCommunityText(req.body && req.body.displayName);
   const city = normalizeCommunityText(req.body && req.body.city);
@@ -989,12 +1044,16 @@ app.post("/community/profile", async (req, res) => {
   const latitude = req.body && req.body.latitude != null ? normalizeCoordinate(req.body.latitude, null) : null;
   const longitude = req.body && req.body.longitude != null ? normalizeCoordinate(req.body.longitude, null) : null;
   if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
+  if (!communitySecret) return res.status(401).json({ error: "missing communitySecret" });
   if (!fullName) return res.status(400).json({ error: "missing fullName" });
   const client = await pool.connect();
   try {
     const existing = await getCommunityUserByKey(client, communityKey);
     let rows;
     if (existing) {
+      if (existing.community_secret && existing.community_secret !== communitySecret) {
+        return res.status(401).json({ error: "invalid credentials" });
+      }
       ({ rows } = await client.query(
         `UPDATE community_users
          SET full_name = $2,
@@ -1005,23 +1064,26 @@ app.post("/community/profile", async (req, res) => {
              address = $7,
              latitude = $8,
              longitude = $9,
+             community_secret = COALESCE(community_secret, $10),
              last_seen_at = NOW(),
              updated_at = NOW()
          WHERE community_key = $1
          RETURNING *`,
-        [communityKey, fullName, displayName, city, church, status, address, latitude, longitude]
+        [communityKey, fullName, displayName, city, church, status, address, latitude, longitude, communitySecret]
       ));
     } else {
       ({ rows } = await client.query(
         `INSERT INTO community_users
-           (community_key, full_name, display_name, city, church, role, status, address, latitude, longitude, last_seen_at, updated_at)
+           (community_key, community_secret, full_name, display_name, city, church, role, status, address, latitude, longitude, last_seen_at, updated_at)
          VALUES
-           ($1, $2, $3, $4, $5, 'feligres', $6, $7, $8, $9, NOW(), NOW())
+           ($1, $10, $2, $3, $4, $5, 'feligres', $6, $7, $8, $9, NOW(), NOW())
          RETURNING *`,
-        [communityKey, fullName, displayName, city, church, status, address, latitude, longitude]
+        [communityKey, fullName, displayName, city, church, status, address, latitude, longitude, communitySecret]
       ));
     }
     return res.json({ ok: true, profile: serializeCommunityUser(rows[0]) });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message || "failed to save profile" });
   } finally {
     client.release();
   }
@@ -1032,7 +1094,7 @@ app.get("/community/members-map", async (req, res) => {
   if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
   const client = await pool.connect();
   try {
-    const requester = await requireCommunityUser(client, communityKey);
+    const requester = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
     requireDirigenteRole(requester);
     const church = requester.church;
     if (!church) return res.json({ ok: true, members: [] });
@@ -1044,7 +1106,7 @@ app.get("/community/members-map", async (req, res) => {
        ORDER BY full_name`,
       [church]
     );
-    return res.json({ ok: true, members: rows.map(serializeCommunityUser) });
+    return res.json({ ok: true, members: rows.map(serializeCommunityMember) });
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.message || "failed" });
   } finally {
@@ -1059,7 +1121,7 @@ app.post("/community/role-request", async (req, res) => {
   if (requestedRole === "feligres") return res.status(400).json({ error: "requestedRole must be elevated" });
   const client = await pool.connect();
   try {
-    const user = await requireCommunityUser(client, communityKey);
+    const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
     const { rows } = await client.query(
       `UPDATE community_users
        SET requested_role = $2,
@@ -1086,7 +1148,7 @@ app.post("/community/approve-role", async (req, res) => {
   if (!["colaborador", "dirigente"].includes(approvedRole)) return res.status(400).json({ error: "invalid approvedRole" });
   const client = await pool.connect();
   try {
-    const actor = await requireCommunityUser(client, communityKey);
+    const actor = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
     const canApproveByRole = actor.role === "dirigente";
     const canApproveByCode = COMMUNITY_ADMIN_CODE && adminCode === COMMUNITY_ADMIN_CODE;
     if (!canApproveByRole && !canApproveByCode) {
@@ -1094,6 +1156,9 @@ app.post("/community/approve-role", async (req, res) => {
     }
     const user = await getCommunityUserByKey(client, targetCommunityKey);
     if (!user) return res.status(404).json({ error: "target user not found" });
+    if (canApproveByRole && !canApproveByCode && actor.church && user.church !== actor.church) {
+      return res.status(403).json({ error: "no podes aprobar usuarios de otra iglesia" });
+    }
     const { rows } = await client.query(
       `UPDATE community_users
        SET role = $2,
@@ -1106,7 +1171,7 @@ app.post("/community/approve-role", async (req, res) => {
        RETURNING *`,
       [user.id, approvedRole, actor.id]
     );
-    return res.json({ ok: true, profile: serializeCommunityUser(rows[0]) });
+    return res.json({ ok: true, profile: serializeCommunityMember(rows[0]) });
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.message || "failed to approve role" });
   } finally {
@@ -1127,7 +1192,7 @@ app.post("/community/locations", async (req, res) => {
   if (!name) return res.status(400).json({ error: "missing name" });
   const client = await pool.connect();
   try {
-    const user = await requireCommunityUser(client, communityKey);
+    const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
     requireLeaderRole(user);
     const slugBase = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     const slug = `${slugBase || "sede"}-${Date.now().toString(36)}`;
@@ -1175,7 +1240,7 @@ app.post("/community/events", async (req, res) => {
   if (!startsAt) return res.status(400).json({ error: "missing startsAt" });
   const client = await pool.connect();
   try {
-    const user = await requireCommunityUser(client, communityKey);
+    const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
     requireLeaderRole(user);
     const { rows } = await client.query(
       `INSERT INTO community_events
@@ -1200,7 +1265,7 @@ app.post("/community/events/:eventId/check-in", async (req, res) => {
   if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
   const client = await pool.connect();
   try {
-    const user = await requireCommunityUser(client, communityKey);
+    const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
     const { rows: eventRows } = await client.query(
       `SELECT id, allow_check_in, status
        FROM community_events
@@ -1284,12 +1349,7 @@ app.post("/community/study-cells", async (req, res) => {
   if (!name || !name.trim()) return res.status(400).json({ error: "missing cell name" });
   const client = await pool.connect();
   try {
-    const userResult = await client.query(
-      `SELECT id, role FROM community_users WHERE community_key = $1`,
-      [communityKey]
-    );
-    if (!userResult.rows.length) return res.status(403).json({ error: "user not found" });
-    const user = userResult.rows[0];
+    const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
     if (user.role !== "dirigente") return res.status(403).json({ error: "solo los dirigentes pueden crear celulas" });
     const result = await client.query(
       `INSERT INTO community_study_cells (name, meeting_day, meeting_time, location_id, created_by_user_id, church, city)
@@ -1307,7 +1367,7 @@ app.post("/community/study-cells", async (req, res) => {
     );
     return res.json({ cell: result.rows[0] });
   } catch (error) {
-    return res.status(500).json({ error: error.message || "failed to create study cell" });
+    return res.status(error.status || 500).json({ error: error.message || "failed to create study cell" });
   } finally {
     client.release();
   }
@@ -1319,12 +1379,7 @@ app.post("/community/study-materials", async (req, res) => {
   if (!title || !title.trim()) return res.status(400).json({ error: "missing material title" });
   const client = await pool.connect();
   try {
-    const userResult = await client.query(
-      `SELECT id, role FROM community_users WHERE community_key = $1`,
-      [communityKey]
-    );
-    if (!userResult.rows.length) return res.status(403).json({ error: "user not found" });
-    const user = userResult.rows[0];
+    const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
     if (!["dirigente", "colaborador"].includes(user.role)) {
       return res.status(403).json({ error: "se requiere rol colaborador o dirigente" });
     }
@@ -1344,7 +1399,7 @@ app.post("/community/study-materials", async (req, res) => {
     );
     return res.json({ material: result.rows[0] });
   } catch (error) {
-    return res.status(500).json({ error: error.message || "failed to create study material" });
+    return res.status(error.status || 500).json({ error: error.message || "failed to create study material" });
   } finally {
     client.release();
   }
