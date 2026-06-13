@@ -128,6 +128,11 @@ const communityFullName = document.getElementById("communityFullName");
 const communityRole = document.getElementById("communityRole");
 const communityCity = document.getElementById("communityCity");
 const communityChurch = document.getElementById("communityChurch");
+const communityAddress = document.getElementById("communityAddress");
+const communityLocateBtn = document.getElementById("communityLocateBtn");
+const communityLocationStatus = document.getElementById("communityLocationStatus");
+const communityMiembrosList = document.getElementById("communityMiembrosList");
+const communityMiembrosHint = document.getElementById("communityMiembrosHint");
 const communitySave = document.getElementById("communitySave");
 const communityRequestRole = document.getElementById("communityRequestRole");
 const communitySummary = document.getElementById("communitySummary");
@@ -224,6 +229,7 @@ let currentResultVersion = "";
 let currentResultReference = "";
 let activeHighlightRange = null;
 let activeHighlightContainer = null;
+let activeHighlightColor = "amarillo";
 let lastTapAt = 0;
 let lastTapContainer = null;
 let highlightTouchStartRange = null;
@@ -280,7 +286,10 @@ function readCommunityInfo() {
       role: "feligres",
       requestedRole: "",
       city: "",
-      church: ""
+      church: "",
+      address: "",
+      latitude: null,
+      longitude: null
     };
     const parsed = JSON.parse(raw);
     return {
@@ -289,7 +298,10 @@ function readCommunityInfo() {
       role: String(parsed.role || "feligres"),
       requestedRole: String(parsed.requestedRole || ""),
       city: String(parsed.city || ""),
-      church: String(parsed.church || "")
+      church: String(parsed.church || ""),
+      address: String(parsed.address || ""),
+      latitude: parsed.latitude != null ? Number(parsed.latitude) : null,
+      longitude: parsed.longitude != null ? Number(parsed.longitude) : null
     };
   } catch {
     return {
@@ -298,7 +310,10 @@ function readCommunityInfo() {
       role: "feligres",
       requestedRole: "",
       city: "",
-      church: ""
+      church: "",
+      address: "",
+      latitude: null,
+      longitude: null
     };
   }
 }
@@ -317,6 +332,7 @@ function updateCommunityUi(info) {
   const requestedRole = info.requestedRole ? info.requestedRole.trim() : "";
   const city = info.city ? info.city.trim() : "";
   const church = info.church ? info.church.trim() : "";
+  const address = info.address ? info.address.trim() : "";
   const hasData = Boolean(fullName || city || church);
   if (communitySummary) {
     const parts = [];
@@ -334,6 +350,7 @@ function updateCommunityUi(info) {
   if (communityRole) communityRole.value = requestedRole || role || "feligres";
   if (communityCity) communityCity.value = city;
   if (communityChurch) communityChurch.value = church;
+  if (communityAddress) communityAddress.value = address;
   const effectiveRole = devSimulatedRole || role;
   const isLeader = effectiveRole === "dirigente" || effectiveRole === "colaborador";
   const isDirigente = effectiveRole === "dirigente";
@@ -343,6 +360,10 @@ function updateCommunityUi(info) {
   if (communityAdminSection) communityAdminSection.classList.toggle("role-hidden", !canModerateRoles);
   const moderacionTab = document.getElementById("communityTabModeracion");
   if (moderacionTab) moderacionTab.classList.toggle("role-hidden", !canModerateRoles);
+  const miembrosTab = document.getElementById("communityTabMiembros");
+  if (miembrosTab) miembrosTab.classList.toggle("role-hidden", !isDirigente);
+  const miembrosSection = document.getElementById("communityMiembrosSection");
+  if (miembrosSection) miembrosSection.classList.toggle("role-hidden", !isDirigente);
   if (communityAdminCodeGroup) communityAdminCodeGroup.hidden = isDirigente;
   if (communityApproveRole) communityApproveRole.hidden = true;
   if (communityCreateCellForm) communityCreateCellForm.classList.toggle("role-hidden", !isDirigente);
@@ -719,7 +740,10 @@ async function loadCommunityData(showMessage) {
       role: data.profile.role || localInfo.role || "feligres",
       requestedRole: data.profile.requestedRole || "",
       city: data.profile.city || localInfo.city || "",
-      church: data.profile.church || localInfo.church || ""
+      church: data.profile.church || localInfo.church || "",
+      address: data.profile.address || localInfo.address || "",
+      latitude: data.profile.latitude != null ? data.profile.latitude : localInfo.latitude,
+      longitude: data.profile.longitude != null ? data.profile.longitude : localInfo.longitude
     };
     writeCommunityInfo(merged);
     updateCommunityUi(merged);
@@ -752,11 +776,17 @@ async function saveCommunityProfile() {
   const fullName = communityFullName ? communityFullName.value.trim() : "";
   const city = communityCity ? communityCity.value.trim() : "";
   const church = communityChurch ? communityChurch.value.trim() : "";
+  const address = communityAddress ? communityAddress.value.trim() : "";
+  const localInfo = readCommunityInfo();
   if (!fullName) {
     setCommunityStatus("Escribe tu nombre para guardar el perfil.", true);
     return;
   }
-  const payload = { communityKey, fullName, city, church, status: "active" };
+  const payload = {
+    communityKey, fullName, city, church, status: "active", address,
+    latitude: localInfo.latitude,
+    longitude: localInfo.longitude
+  };
   const data = await communityRequest("/community/profile", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -768,14 +798,119 @@ async function saveCommunityProfile() {
     role: data.profile.role,
     requestedRole: data.profile.requestedRole || "",
     city: data.profile.city || "",
-    church: data.profile.church || ""
+    church: data.profile.church || "",
+    address: data.profile.address || address,
+    latitude: data.profile.latitude != null ? data.profile.latitude : localInfo.latitude,
+    longitude: data.profile.longitude != null ? data.profile.longitude : localInfo.longitude
   });
   updateCommunityUi(readCommunityInfo());
-  await updatePushPreferences().catch(() => {
-    // ignore
-  });
+  await updatePushPreferences().catch(() => {});
   await loadCommunityData(false);
   setCommunityStatus("Perfil guardado.", false);
+}
+
+function useCommunityProfileLocation() {
+  if (!navigator.geolocation) {
+    if (communityLocationStatus) {
+      communityLocationStatus.textContent = "Geolocalizacion no disponible en este navegador.";
+      communityLocationStatus.hidden = false;
+    }
+    return;
+  }
+  if (communityLocationStatus) {
+    communityLocationStatus.textContent = "Obteniendo ubicacion...";
+    communityLocationStatus.hidden = false;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const info = readCommunityInfo();
+      writeCommunityInfo({ ...info, latitude: lat, longitude: lng });
+      if (communityLocationStatus) {
+        communityLocationStatus.textContent = `Ubicacion guardada (${lat.toFixed(4)}, ${lng.toFixed(4)}).`;
+      }
+    },
+    () => {
+      if (communityLocationStatus) {
+        communityLocationStatus.textContent = "No se pudo obtener la ubicacion.";
+      }
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+async function loadCommunityMembers() {
+  if (!communityMiembrosList) return;
+  const communityKey = getCommunityKey();
+  communityMiembrosList.innerHTML = "";
+  if (communityMiembrosHint) communityMiembrosHint.hidden = false;
+  const data = await communityRequest(`/community/members-map?communityKey=${encodeURIComponent(communityKey)}`);
+  if (!data || !Array.isArray(data.members)) return;
+  const localInfo = readCommunityInfo();
+  const myLat = localInfo.latitude;
+  const myLng = localInfo.longitude;
+  const withDist = data.members.map((m) => {
+    let dist = null;
+    if (myLat != null && myLng != null && m.latitude != null && m.longitude != null) {
+      dist = calculateDistanceKm(myLat, myLng, m.latitude, m.longitude);
+    }
+    return { ...m, dist };
+  });
+  withDist.sort((a, b) => {
+    if (a.dist == null && b.dist == null) return 0;
+    if (a.dist == null) return 1;
+    if (b.dist == null) return -1;
+    return a.dist - b.dist;
+  });
+  renderCommunityMembers(withDist);
+  if (communityMiembrosHint) {
+    communityMiembrosHint.textContent = myLat == null
+      ? "Guarda tu ubicacion en el perfil para ver distancias."
+      : `${withDist.length} miembro${withDist.length !== 1 ? "s" : ""} en tu iglesia.`;
+    communityMiembrosHint.hidden = false;
+  }
+}
+
+function renderCommunityMembers(members) {
+  if (!communityMiembrosList) return;
+  communityMiembrosList.innerHTML = "";
+  if (!members.length) {
+    communityMiembrosList.innerHTML = `<p class="community-note">Sin miembros registrados en tu iglesia.</p>`;
+    return;
+  }
+  const groups = [
+    { label: "Cerca (menos de 2 km)", members: members.filter((m) => m.dist != null && m.dist < 2) },
+    { label: "A distancia media (2-10 km)", members: members.filter((m) => m.dist != null && m.dist >= 2 && m.dist < 10) },
+    { label: "Lejos (mas de 10 km)", members: members.filter((m) => m.dist != null && m.dist >= 10) },
+    { label: "Sin ubicacion", members: members.filter((m) => m.dist == null) }
+  ];
+  groups.forEach((group) => {
+    if (!group.members.length) return;
+    const header = document.createElement("p");
+    header.className = "member-group-header";
+    header.textContent = group.label;
+    communityMiembrosList.appendChild(header);
+    group.members.forEach((m) => {
+      const initials = (m.fullName || m.displayName || "?").split(" ").map((w) => w[0]).join("").slice(0, 2);
+      const distLabel = m.dist != null ? `${m.dist < 1 ? (m.dist * 1000).toFixed(0) + " m" : m.dist.toFixed(1) + " km"}` : "";
+      const card = document.createElement("div");
+      card.className = "member-card";
+      const mapsUrl = m.latitude != null
+        ? `https://maps.google.com/maps?q=${m.latitude},${m.longitude}`
+        : m.address ? `https://maps.google.com/maps?q=${encodeURIComponent(m.address)}` : null;
+      card.innerHTML = `
+        <div class="member-avatar">${escapeHtml(initials.toUpperCase())}</div>
+        <div class="member-info">
+          <p class="member-name">${escapeHtml(m.fullName || m.displayName || "Sin nombre")}</p>
+          ${m.address ? `<p class="member-address">${escapeHtml(m.address)}</p>` : ""}
+        </div>
+        ${distLabel ? `<span class="member-dist">${distLabel}</span>` : ""}
+        ${mapsUrl ? `<a class="ghost" href="${mapsUrl}" target="_blank" rel="noopener" style="font-size:11px;padding:4px 8px">Ver</a>` : ""}
+      `;
+      communityMiembrosList.appendChild(card);
+    });
+  });
 }
 
 async function requestCommunityRole() {
@@ -1547,11 +1682,14 @@ function writeHighlights(key, highlights) {
   }
 }
 
+const HIGHLIGHT_COLORS = ["amarillo", "verde", "azul", "rosa"];
+
 function normalizeHighlights(highlights, maxLen) {
   const cleaned = highlights
     .map((h) => ({
       start: Math.max(0, Math.min(maxLen, Number(h.start))),
-      end: Math.max(0, Math.min(maxLen, Number(h.end)))
+      end: Math.max(0, Math.min(maxLen, Number(h.end))),
+      color: HIGHLIGHT_COLORS.includes(h.color) ? h.color : "amarillo"
     }))
     .filter((h) => Number.isFinite(h.start) && Number.isFinite(h.end) && h.end > h.start)
     .sort((a, b) => a.start - b.start);
@@ -1559,10 +1697,10 @@ function normalizeHighlights(highlights, maxLen) {
   const merged = [];
   cleaned.forEach((h) => {
     const last = merged[merged.length - 1];
-    if (last && h.start <= last.end) {
+    if (last && h.start <= last.end && last.color === h.color) {
       last.end = Math.max(last.end, h.end);
     } else {
-      merged.push({ start: h.start, end: h.end });
+      merged.push({ start: h.start, end: h.end, color: h.color });
     }
   });
   return merged;
@@ -1591,7 +1729,7 @@ function renderHighlights(container, text, highlights) {
       html += escapeHtml(text.slice(cursor, h.start));
     }
     const chunk = escapeHtml(text.slice(h.start, h.end));
-    html += `<span class="highlight" data-index="${idx}" data-start="${h.start}" data-end="${h.end}">${chunk}</span>`;
+    html += `<span class="highlight highlight-${h.color}" data-index="${idx}" data-start="${h.start}" data-end="${h.end}">${chunk}</span>`;
     cursor = h.end;
   });
   if (cursor < text.length) {
@@ -3075,11 +3213,18 @@ function maybeShowHighlightButton(container) {
   highlightBtn.hidden = false;
 }
 
-function applyHighlight() {
+function applyHighlight(color) {
   if (!activeHighlightRange || !currentResultKey) return;
+  const useColor = HIGHLIGHT_COLORS.includes(color) ? color : activeHighlightColor;
   const highlights = readHighlights(highlightStorageKey());
-  highlights.push(activeHighlightRange);
-  writeHighlights(highlightStorageKey(), normalizeHighlights(highlights, currentResultText.length));
+  if (!color) {
+    // Erase: remove any highlight that overlaps the active range
+    const next = highlights.filter((h) => h.end <= activeHighlightRange.start || h.start >= activeHighlightRange.end);
+    writeHighlights(highlightStorageKey(), normalizeHighlights(next, currentResultText.length));
+  } else {
+    highlights.push({ ...activeHighlightRange, color: useColor });
+    writeHighlights(highlightStorageKey(), normalizeHighlights(highlights, currentResultText.length));
+  }
   updateHighlightedViews();
   const selection = window.getSelection();
   if (selection && selection.removeAllRanges) selection.removeAllRanges();
@@ -3093,10 +3238,17 @@ function removeHighlightFromClick(event) {
   const start = Number(target.dataset.start);
   const end = Number(target.dataset.end);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return;
-  const highlights = readHighlights(highlightStorageKey());
-  const next = highlights.filter((h) => !(Number(h.start) === start && Number(h.end) === end));
-  writeHighlights(highlightStorageKey(), normalizeHighlights(next, currentResultText.length));
-  updateHighlightedViews();
+  // Show color picker at tap position so the user can change color or erase
+  activeHighlightRange = { start, end };
+  activeHighlightContainer = target.closest("[data-highlight-host]") || verseEl;
+  const rect = target.getBoundingClientRect();
+  const top = Math.max(12, rect.top + window.scrollY - 46);
+  const left = Math.min(window.innerWidth - 200, rect.left + window.scrollX);
+  if (highlightBtn) {
+    highlightBtn.style.top = `${top}px`;
+    highlightBtn.style.left = `${left}px`;
+    highlightBtn.hidden = false;
+  }
 }
 
 function getRangeFromPoint(x, y) {
@@ -3128,7 +3280,7 @@ function highlightWordAtPoint(container, clientX, clientY) {
   const word = getWordOffsets(container.textContent, offsets.end);
   if (word.end - word.start < 2) return;
   activeHighlightRange = word;
-  applyHighlight();
+  applyHighlight(activeHighlightColor);
 }
 
 function handleDoubleTap(container, event) {
@@ -3143,7 +3295,7 @@ function handleDoubleTap(container, event) {
     return;
   }
   maybeShowHighlightButton(container);
-  applyHighlight();
+  applyHighlight(activeHighlightColor);
 }
 
 function startHighlightTouch(container, event) {
@@ -3197,7 +3349,7 @@ function endHighlightTouch(event) {
   const offsets = getSelectionOffsets(highlightTouchContainer, combined);
   if (offsets.end - offsets.start >= 2) {
     activeHighlightRange = offsets;
-    applyHighlight();
+    applyHighlight(activeHighlightColor);
   }
   highlightTouchStartRange = null;
   highlightTouchContainer = null;
@@ -3258,7 +3410,13 @@ addListener(document, "selectionchange", () => {
   }
   hideHighlightButton();
 });
-addListener(highlightBtn, "click", applyHighlight);
+addListener(highlightBtn, "click", (event) => {
+  const swatch = event.target.closest(".hl-swatch");
+  if (!swatch) return;
+  const color = swatch.dataset.color;
+  activeHighlightColor = HIGHLIGHT_COLORS.includes(color) ? color : activeHighlightColor;
+  applyHighlight(color || null);
+});
 
 addListener(menuBtn, "click", openMenu);
 addListener(menuClose, "click", closeMenu);
@@ -3320,6 +3478,9 @@ addListener(document.getElementById("communityTabs"), "click", (event) => {
   const tabBtn = target.closest(".community-tab");
   if (!tabBtn) return;
   setCommunityTab(tabBtn.dataset.tab);
+  if (tabBtn.dataset.tab === "miembros") {
+    loadCommunityMembers().catch(() => {});
+  }
 });
 
 addListener(communityOpen, "click", () => {
@@ -3398,6 +3559,12 @@ addListener(communityEventsList, "click", (event) => {
   if (!eventId) return;
   checkInToCommunityEvent(eventId).catch((error) => {
     setCommunityStatus(String(error && error.message ? error.message : error), true);
+  });
+});
+addListener(communityLocateBtn, "click", useCommunityProfileLocation);
+addListener(document.getElementById("communityRefreshMembers"), "click", () => {
+  loadCommunityMembers().catch((err) => {
+    setCommunityStatus(String(err && err.message ? err.message : err), true);
   });
 });
 addListener(bigUiToggle, "change", () => {

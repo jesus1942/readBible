@@ -249,6 +249,7 @@
           <button class="community-tab" data-tab="sedes" type="button">Sedes</button>
           <button class="community-tab" data-tab="eventos" type="button">Eventos</button>
           <button class="community-tab" data-tab="celulas" type="button">Celulas</button>
+          <button class="community-tab role-hidden" id="communityTabMiembros" data-tab="miembros" type="button">Miembros</button>
           <button class="community-tab role-hidden" id="communityTabModeracion" data-tab="moderacion" type="button">Moderacion</button>
         </div>
 
@@ -266,6 +267,14 @@
           <input id="communityCity" type="text" placeholder="Ej: Puerto Madryn" />
           <label for="communityChurch">Iglesia</label>
           <input id="communityChurch" type="text" placeholder="Ej: HDR" />
+          <label for="communityAddress">Domicilio</label>
+          <div class="community-address-row">
+            <input id="communityAddress" type="text" placeholder="Ej: San Martin 450" />
+            <button id="communityLocateBtn" class="ghost icon-btn" type="button" title="Usar mi ubicacion">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/><circle cx="12" cy="12" r="9" opacity=".25"/></svg>
+            </button>
+          </div>
+          <p id="communityLocationStatus" class="community-note" hidden></p>
           <button id="communitySave" class="ghost">Guardar perfil</button>
           <button id="communityRequestRole" class="ghost" type="button">Solicitar elevacion</button>
         </div>
@@ -364,6 +373,15 @@
           <select id="communityCellLocation"></select>
           <button id="communityCreateCellBtn" class="ghost" type="button">Crear celula</button>
         </div>
+
+        <div id="communityMiembrosSection" class="community-section role-hidden" data-community-tab="miembros">
+          <div class="community-section-head">
+            <p class="eyebrow">Miembros por cercania</p>
+            <button id="communityRefreshMembers" class="ghost" type="button">Actualizar</button>
+          </div>
+          <p id="communityMiembrosHint" class="community-note">Guarda tu ubicacion en el perfil para ver distancias.</p>
+          <div id="communityMiembrosList" class="community-list"></div>
+        </div>
       </div>
     </div>
 
@@ -393,7 +411,13 @@
       </div>
     </div>
 
-    <button id="highlightBtn" class="highlight-btn" type="button" hidden>Resaltar</button>
+    <div id="highlightBtn" class="highlight-picker" hidden role="toolbar" aria-label="Color de resaltado">
+      <button class="hl-swatch" data-color="amarillo" style="--hl-c:#ffd64a" aria-label="Amarillo"></button>
+      <button class="hl-swatch" data-color="verde" style="--hl-c:#6fdc8c" aria-label="Verde"></button>
+      <button class="hl-swatch" data-color="azul" style="--hl-c:#6ea6ff" aria-label="Azul"></button>
+      <button class="hl-swatch" data-color="rosa" style="--hl-c:#f4a8d0" aria-label="Rosa"></button>
+      <button class="hl-swatch hl-erase" data-color="" aria-label="Borrar resaltado">✕</button>
+    </div>
 
 
     <!-- Developer panel overlay -->

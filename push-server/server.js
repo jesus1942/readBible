@@ -142,6 +142,10 @@ async function ensureSchema() {
   await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS community_key TEXT;`);
   await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS requested_role TEXT;`);
   await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS address TEXT;`);
+  await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;`);
+  await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS community_users_coords_idx ON community_users (latitude, longitude) WHERE latitude IS NOT NULL;`);
   await pool.query(`
     DO $$
     BEGIN
@@ -662,7 +666,10 @@ function serializeCommunityUser(row) {
     role: row.role,
     requestedRole: row.requested_role,
     requestedAt: row.requested_at,
-    status: row.status
+    status: row.status,
+    address: row.address || null,
+    latitude: row.latitude != null ? Number(row.latitude) : null,
+    longitude: row.longitude != null ? Number(row.longitude) : null
   };
 }
 
@@ -976,6 +983,9 @@ app.post("/community/profile", async (req, res) => {
   const city = normalizeCommunityText(req.body && req.body.city);
   const church = normalizeCommunityText(req.body && req.body.church);
   const status = normalizeCommunityStatus(req.body && req.body.status);
+  const address = normalizeCommunityText(req.body && req.body.address) || null;
+  const latitude = req.body && req.body.latitude != null ? normalizeCoordinate(req.body.latitude, null) : null;
+  const longitude = req.body && req.body.longitude != null ? normalizeCoordinate(req.body.longitude, null) : null;
   if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
   if (!fullName) return res.status(400).json({ error: "missing fullName" });
   const client = await pool.connect();
@@ -990,23 +1000,51 @@ app.post("/community/profile", async (req, res) => {
              city = $4,
              church = $5,
              status = $6,
+             address = $7,
+             latitude = $8,
+             longitude = $9,
              last_seen_at = NOW(),
              updated_at = NOW()
          WHERE community_key = $1
          RETURNING *`,
-        [communityKey, fullName, displayName, city, church, status]
+        [communityKey, fullName, displayName, city, church, status, address, latitude, longitude]
       ));
     } else {
       ({ rows } = await client.query(
         `INSERT INTO community_users
-           (community_key, full_name, display_name, city, church, role, status, last_seen_at, updated_at)
+           (community_key, full_name, display_name, city, church, role, status, address, latitude, longitude, last_seen_at, updated_at)
          VALUES
-           ($1, $2, $3, $4, $5, 'feligres', $6, NOW(), NOW())
+           ($1, $2, $3, $4, $5, 'feligres', $6, $7, $8, $9, NOW(), NOW())
          RETURNING *`,
-        [communityKey, fullName, displayName, city, church, status]
+        [communityKey, fullName, displayName, city, church, status, address, latitude, longitude]
       ));
     }
     return res.json({ ok: true, profile: serializeCommunityUser(rows[0]) });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/community/members-map", async (req, res) => {
+  const communityKey = normalizeCommunityText(req.query.communityKey);
+  if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
+  const client = await pool.connect();
+  try {
+    const requester = await requireCommunityUser(client, communityKey);
+    requireDirigenteRole(requester);
+    const church = requester.church;
+    if (!church) return res.json({ ok: true, members: [] });
+    const { rows } = await client.query(
+      `SELECT id, community_key, full_name, display_name, city, church, role,
+              address, latitude, longitude, status
+       FROM community_users
+       WHERE status = 'active' AND church = $1
+       ORDER BY full_name`,
+      [church]
+    );
+    return res.json({ ok: true, members: rows.map(serializeCommunityUser) });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message || "failed" });
   } finally {
     client.release();
   }
