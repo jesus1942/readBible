@@ -2267,6 +2267,16 @@ function openProjection() {
 </body>
 </html>`;
 
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+  if (isMobile) {
+    // En movil, abrir en la misma pestana como pagina de presentacion
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return;
+  }
+
   const win = window.open("", "_blank",
     "menubar=no,toolbar=no,location=no,status=no,scrollbars=no,width=1280,height=720");
   if (!win) {
@@ -2935,6 +2945,13 @@ addListener(document.getElementById("zenBtn"), "click", openZen);
 addListener(chapterBtn, "click", fetchChapter);
 addListener(zenClose, "click", closeZen);
 addListener(document.getElementById("zenProject"), "click", openProjection);
+// touchend directo sobre cada boton — imprescindible en iOS donde el handler
+// del overlay padre no recibe el toque correctamente sobre elementos hijos
+zenClose.addEventListener("touchend", (e) => { e.stopPropagation(); closeZen(); });
+const zenProjectBtn = document.getElementById("zenProject");
+if (zenProjectBtn) {
+  zenProjectBtn.addEventListener("touchend", (e) => { e.stopPropagation(); openProjection(); });
+}
 addListener(mpButton, "click", (event) => {
   event.preventDefault();
   openMercadoPagoTransfer();
@@ -2955,14 +2972,6 @@ zenOverlay.addEventListener("touchend", (event) => {
   const touch = event.changedTouches[0];
   const dx = touch.clientX - touchStartX;
   const dy = touch.clientY - touchStartY;
-
-  // Cierre: toque sobre el boton de cerrar o el de proyeccion
-  const tapped = document.elementFromPoint(touch.clientX, touch.clientY);
-  if (tapped && tapped.closest(".zen-controls")) {
-    const btn = tapped.closest("button");
-    if (btn && btn.id === "zenClose") { closeZen(); return; }
-    if (btn && btn.id === "zenProject") { openProjection(); return; }
-  }
 
   if (Math.abs(dx) < 30 || Math.abs(dx) < Math.abs(dy)) {
     if (dy < -80) shareVerseAsPng();
