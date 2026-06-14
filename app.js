@@ -110,6 +110,15 @@ const menuClose = document.getElementById("menuClose");
 const helpOpen = document.getElementById("helpOpen");
 const helpOverlay = document.getElementById("helpOverlay");
 const helpClose = document.getElementById("helpClose");
+const tourOverlay = document.getElementById("tourOverlay");
+const tourSpotlight = document.getElementById("tourSpotlight");
+const tourTooltip = document.getElementById("tourTooltip");
+const tourTitle = document.getElementById("tourTitle");
+const tourText = document.getElementById("tourText");
+const tourCounter = document.getElementById("tourCounter");
+const tourSkip = document.getElementById("tourSkip");
+const tourNext = document.getElementById("tourNext");
+const ctxTip = document.getElementById("ctxTip");
 const analytics = typeof window !== "undefined" ? window.umami : null;
 const highlightBtn = document.getElementById("highlightBtn");
 const themeCheckboxes = Array.from(document.querySelectorAll(".theme-chip input"));
@@ -2454,6 +2463,7 @@ function openZen() {
   updateHighlightedViews();
   zenRef.textContent = refEl.textContent;
   zenOverlay.hidden = false;
+  showCtxTip("lectura_plena");
   trackEvent("open_zen");
 }
 
@@ -3324,6 +3334,7 @@ function applyHighlight(color) {
   } else {
     highlights.push({ ...activeHighlightRange, color: useColor });
     writeHighlights(highlightStorageKey(), normalizeHighlights(highlights, currentResultText.length));
+    showCtxTip("resaltado");
   }
   updateHighlightedViews();
   const selection = window.getSelection();
@@ -3567,6 +3578,7 @@ function openCommunity() {
   updateCommunityUi(info);
   setCommunityTab(communityActiveTab);
   if (communityOverlay) communityOverlay.hidden = false;
+  showCtxTip("comunidad");
   loadCommunityData(false).catch((error) => {
     setCommunityStatus(String(error && error.message ? error.message : error), true);
   });
@@ -3851,6 +3863,8 @@ initSplash();
 initScrollObserver();
 initFooterNav();
 initFooterFlame();
+initHelpTabs();
+initTour();
 const communityInfo = readCommunityInfo();
 updateCommunityUi(communityInfo);
 if (communityApiHint) communityApiHint.textContent = `API: ${getPushServerUrl()}`;
@@ -4481,8 +4495,9 @@ function closeMenu() {
   sideMenu.hidden = true;
 }
 
-function openHelp() {
+function openHelp(tab) {
   if (!helpOverlay) return;
+  if (tab) switchHelpTab(tab);
   helpOverlay.hidden = false;
   trackEvent("open_help");
 }
@@ -4490,6 +4505,23 @@ function openHelp() {
 function closeHelp() {
   if (!helpOverlay) return;
   helpOverlay.hidden = true;
+}
+
+function switchHelpTab(name) {
+  helpOverlay.querySelectorAll(".help-tab").forEach((btn) => {
+    btn.classList.toggle("help-tab-active", btn.dataset.helpTab === name);
+  });
+  helpOverlay.querySelectorAll(".help-tab-content").forEach((panel) => {
+    panel.hidden = panel.dataset.helpPanel !== name;
+  });
+}
+
+function initHelpTabs() {
+  helpOverlay.querySelectorAll(".help-tab").forEach((btn) => {
+    btn.addEventListener("click", () => switchHelpTab(btn.dataset.helpTab));
+  });
+  const tourBtn = document.getElementById("helpStartTour");
+  if (tourBtn) tourBtn.addEventListener("click", () => { closeHelp(); startTour(); });
 }
 
 function showHelpIfFirstTime() {
@@ -4502,6 +4534,169 @@ function showHelpIfFirstTime() {
     openHelp();
   }
 }
+
+/* ---- Tour guiado ---- */
+const TOUR_STEPS = [
+  {
+    sel: "#verseInput",
+    title: "Buscar un versiculo",
+    text: "Escribe cualquier referencia biblica. Por ejemplo: Juan 3:16 o Salmos 23:1-3.",
+    pad: 10
+  },
+  {
+    sel: "#searchBtn",
+    title: "Boton Buscar",
+    text: "Toca Buscar o presiona Enter. La app encuentra el versiculo en segundos.",
+    pad: 8
+  },
+  {
+    sel: "#result",
+    title: "Resultado",
+    text: "El texto aparece aqui. Toca y arrastra para resaltar. Manten presionado para agregar una nota de estudio.",
+    pad: 10,
+    whenVisible: true
+  },
+  {
+    sel: ".footer-nav",
+    title: "Barra de navegacion",
+    text: "Desde aqui accedes rapidamente a la busqueda, la comunidad y el menu lateral.",
+    pad: 6
+  },
+  {
+    sel: "#floatCommunityBtn",
+    title: "Comunidad",
+    text: "Conectate con tu iglesia: perfil, mapa de miembros, sedes y eventos.",
+    pad: 10
+  },
+  {
+    sel: "#floatMenuBtn",
+    title: "Menu lateral",
+    text: "Notificaciones, temas, ajustes, ayuda y mas. Todo lo que no esta en la pantalla principal.",
+    pad: 10
+  }
+];
+
+let tourStep = 0;
+let tourActive = false;
+let ctxTipTimer = null;
+
+function startTour() {
+  if (!tourOverlay) return;
+  tourStep = 0;
+  tourActive = true;
+  tourOverlay.hidden = false;
+  showTourStep(0);
+  trackEvent("tour_start");
+}
+
+function endTour() {
+  tourActive = false;
+  if (tourOverlay) tourOverlay.hidden = true;
+  try { localStorage.setItem("tourDone", "1"); } catch { }
+  trackEvent("tour_end");
+}
+
+function showTourStep(idx) {
+  const step = TOUR_STEPS[idx];
+  if (!step) { endTour(); return; }
+
+  const el = document.querySelector(step.sel);
+  const pad = step.pad || 8;
+
+  tourTitle.textContent = step.title;
+  tourText.textContent = step.text;
+  tourCounter.textContent = `${idx + 1} / ${TOUR_STEPS.length}`;
+  tourNext.textContent = idx === TOUR_STEPS.length - 1 ? "Finalizar" : "Siguiente";
+
+  if (!el || (step.whenVisible && el.hidden)) {
+    positionSpotlight(null);
+    positionTooltip(null);
+    return;
+  }
+
+  const rect = el.getBoundingClientRect();
+  positionSpotlight({ top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2, radius: 10 });
+  positionTooltip(rect);
+}
+
+function positionSpotlight(r) {
+  if (!tourSpotlight) return;
+  if (!r) {
+    tourSpotlight.style.top = "45%";
+    tourSpotlight.style.left = "50%";
+    tourSpotlight.style.width = "0px";
+    tourSpotlight.style.height = "0px";
+    return;
+  }
+  tourSpotlight.style.top = r.top + "px";
+  tourSpotlight.style.left = r.left + "px";
+  tourSpotlight.style.width = r.width + "px";
+  tourSpotlight.style.height = r.height + "px";
+  tourSpotlight.style.borderRadius = r.radius + "px";
+}
+
+function positionTooltip(targetRect) {
+  if (!tourTooltip) return;
+  const tw = tourTooltip.offsetWidth || 300;
+  const th = tourTooltip.offsetHeight || 120;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const margin = 12;
+
+  let top, left;
+
+  if (!targetRect) {
+    top = vh / 2 - th / 2;
+    left = vw / 2 - tw / 2;
+  } else {
+    const spaceBelow = vh - targetRect.bottom;
+    const spaceAbove = targetRect.top;
+    if (spaceBelow >= th + margin + 8) {
+      top = targetRect.bottom + margin;
+    } else if (spaceAbove >= th + margin + 8) {
+      top = targetRect.top - th - margin;
+    } else {
+      top = vh / 2 - th / 2;
+    }
+    left = targetRect.left + targetRect.width / 2 - tw / 2;
+    left = Math.max(margin, Math.min(vw - tw - margin, left));
+    top = Math.max(margin, Math.min(vh - th - margin, top));
+  }
+
+  tourTooltip.style.top = top + "px";
+  tourTooltip.style.left = left + "px";
+}
+
+function initTour() {
+  if (!tourNext || !tourSkip) return;
+  tourNext.addEventListener("click", () => {
+    tourStep += 1;
+    if (tourStep >= TOUR_STEPS.length) endTour();
+    else showTourStep(tourStep);
+  });
+  tourSkip.addEventListener("click", endTour);
+}
+
+/* ---- Tips contextuales ---- */
+const CTX_TIPS = {
+  comunidad: "Completa tu perfil de comunidad para aparecer en el mapa de tu iglesia.",
+  lectura_plena: "En lectura plena, desliza hacia arriba para compartir el versiculo.",
+  resaltado: "Arrastra sobre el texto para resaltar versiculos. Mantelo presionado para notas."
+};
+
+function showCtxTip(key) {
+  if (!ctxTip) return;
+  try {
+    if (localStorage.getItem("ctxTip_" + key)) return;
+    localStorage.setItem("ctxTip_" + key, "1");
+  } catch { }
+  if (ctxTipTimer) clearTimeout(ctxTipTimer);
+  ctxTip.textContent = CTX_TIPS[key] || "";
+  ctxTip.hidden = false;
+  ctxTipTimer = setTimeout(() => { if (ctxTip) ctxTip.hidden = true; }, 4200);
+}
+
+ctxTip && ctxTip.addEventListener("click", () => { ctxTip.hidden = true; });
 
 
 async function fetchVerseByReference(reference, version) {

@@ -220,22 +220,90 @@
     </div>
 
     <div id="helpOverlay" class="help-overlay" hidden>
-      <div class="help-card">
-        <p class="eyebrow">Como funciona</p>
-        <ol class="help-steps">
-          <li>Escribe una referencia: <strong>Juan 3:16</strong>.</li>
-          <li>Usa rangos: <strong>3:8-12</strong> para varios versiculos.</li>
-          <li>Lee el capitulo con <strong>Capitulo completo</strong>.</li>
-          <li>Navega con <strong>Anterior/Siguiente</strong> o desliza en lectura plena.</li>
-          <li>Activa <strong>Lectura plena</strong> para concentrarte.</li>
-          <li>El versiculo del dia aparece al abrir la app.</li>
-          <li>En lectura plena, desliza hacia arriba para compartir.</li>
-          <li>Para resaltar, toca y desliza sobre el texto.</li>
-          <li>Manten presionado el resultado para notas de estudio.</li>
-        </ol>
-        <button id="helpClose">Entendido</button>
+      <div class="help-card help-card-tabs">
+        <p class="eyebrow">Centro de ayuda</p>
+        <div class="help-tabs" role="tablist">
+          <button class="help-tab help-tab-active" data-help-tab="lectura" type="button" role="tab">Lectura</button>
+          <button class="help-tab" data-help-tab="comunidad" type="button" role="tab">Comunidad</button>
+          <button class="help-tab" data-help-tab="roles" type="button" role="tab">Roles</button>
+          <button class="help-tab" data-help-tab="notif" type="button" role="tab">Notificaciones</button>
+        </div>
+        <div class="help-tab-content" data-help-panel="lectura">
+          <ol class="help-steps">
+            <li>Escribe una referencia: <strong>Juan 3:16</strong> y toca Buscar.</li>
+            <li>Usa rangos: <strong>Juan 3:16-17</strong> para varios versiculos juntos.</li>
+            <li>Toca <strong>Capitulo completo</strong> para leer desde el principio.</li>
+            <li>Navega con <strong>Anterior / Siguiente</strong> entre capitulos.</li>
+            <li>Activa <strong>Lectura plena</strong> para leer sin distracciones.</li>
+            <li>En lectura plena, desliza hacia arriba para compartir el versiculo.</li>
+            <li>Toca y arrastra sobre el texto para resaltarlo.</li>
+            <li>Manten presionado el resultado para crear una nota de estudio.</li>
+            <li>El versiculo del dia aparece automaticamente al abrir la app.</li>
+          </ol>
+          <button class="help-tour-btn" id="helpStartTour" type="button">Iniciar tour guiado</button>
+        </div>
+        <div class="help-tab-content" data-help-panel="comunidad" hidden>
+          <ol class="help-steps">
+            <li>Abre <strong>Comunidad</strong> desde el boton inferior y completa tu perfil.</li>
+            <li>Elige tu ciudad e iglesia para aparecer en el mapa de miembros.</li>
+            <li>Solicita un rol si sos colaborador o lider de la iglesia.</li>
+            <li>Un dirigente de tu iglesia aprueba o rechaza tu solicitud.</li>
+            <li>Los colaboradores pueden crear sedes y eventos.</li>
+            <li>Los dirigentes ven el mapa completo y gestionan roles.</li>
+            <li>El check-in a un evento se hace desde la pantalla del evento.</li>
+          </ol>
+        </div>
+        <div class="help-tab-content" data-help-panel="roles" hidden>
+          <div class="help-roles">
+            <div class="help-role">
+              <span class="help-role-badge">Feligres</span>
+              <p>Perfil basico. Ve su propio perfil, el versiculo del dia y los eventos activos. No accede a la configuracion de la iglesia.</p>
+            </div>
+            <div class="help-role">
+              <span class="help-role-badge help-role-col">Colaborador</span>
+              <p>Puede crear sedes fisicas y eventos. Ve el mapa de miembros de su iglesia.</p>
+            </div>
+            <div class="help-role">
+              <span class="help-role-badge help-role-dir">Dirigente</span>
+              <p>Liderazgo completo: aprueba roles de usuarios de su iglesia, gestiona materiales y crea celulas de estudio.</p>
+            </div>
+            <div class="help-role">
+              <span class="help-role-badge help-role-dev">Developer</span>
+              <p>Super-administrador. Habilita iglesias, simula cualquier rol para pruebas y tiene acceso a todo el panel de administracion.</p>
+            </div>
+          </div>
+          <p class="help-note">Para cambiar tu rol toca <strong>Solicitar elevacion</strong> en el panel de Comunidad. Un dirigente de tu iglesia lo aprueba.</p>
+        </div>
+        <div class="help-tab-content" data-help-panel="notif" hidden>
+          <ol class="help-steps">
+            <li>Abre el menu lateral y toca <strong>Activar notificaciones</strong>.</li>
+            <li>El sistema te va a pedir permiso en el navegador: acepta.</li>
+            <li>Recibes el versiculo del dia cada manana segun tu zona horaria.</li>
+            <li>Los dirigentes pueden enviar avisos de eventos a toda la comunidad.</li>
+            <li>Para desactivar, toca <strong>Desactivar notificaciones</strong> en el mismo lugar.</li>
+            <li>Tambien podes administrar los permisos desde Ajustes del navegador.</li>
+          </ol>
+        </div>
+        <button id="helpClose">Cerrar</button>
       </div>
     </div>
+
+    <div id="tourOverlay" class="tour-overlay" hidden aria-hidden="true">
+      <div id="tourSpotlight" class="tour-spotlight"></div>
+      <div id="tourTooltip" class="tour-tooltip">
+        <p id="tourTitle" class="tour-title"></p>
+        <p id="tourText" class="tour-text"></p>
+        <div class="tour-footer">
+          <span id="tourCounter" class="tour-counter"></span>
+          <div class="tour-btns">
+            <button id="tourSkip" class="tour-btn-skip" type="button">Saltar</button>
+            <button id="tourNext" class="tour-btn-next" type="button">Siguiente</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="ctxTip" class="ctx-tip" hidden aria-live="polite"></div>
 
     <div id="communityOverlay" class="sheet-overlay center community-overlay" hidden>
       <div class="sheet-card community-sheet">
