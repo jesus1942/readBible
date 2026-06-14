@@ -1461,6 +1461,68 @@ button:active {
   pointer-events: auto;
 }
 
+/* Banner de actualizacion */
+.update-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: #1c1a16;
+  color: #f4f0e6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  z-index: 2100;
+  font-family: var(--serif);
+  font-size: 13.5px;
+  transform: translateY(-110%);
+  transition: transform 320ms ease;
+}
+
+.update-banner:not([hidden]) {
+  transform: translateY(0);
+}
+
+.update-banner[hidden] {
+  display: flex !important;
+  visibility: hidden;
+}
+
+.update-banner-text { flex: 1; margin: 0; }
+
+.update-banner-btn {
+  background: var(--gold);
+  color: #1c1a16;
+  border: none;
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-family: var(--serif);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter 150ms ease;
+}
+
+.update-banner-btn:hover { filter: brightness(1.1); }
+
+.update-banner-dismiss {
+  background: transparent;
+  border: none;
+  color: #a09080;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.app-version-label {
+  font-size: 11px;
+  color: #a08858;
+  margin: 6px 0 0;
+}
+
 .footer-actions {
   display: flex;
   flex-wrap: wrap;

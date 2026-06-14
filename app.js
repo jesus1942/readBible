@@ -1,3 +1,5 @@
+const APP_VERSION = "1.2.0";
+
 const versions = [
   "RVR1960", "RVC", "NVI", "NBLA", "LBLA", "NTV",
   "NBLH", "DHH", "TLA", "PDT", "BLPH", "NBD",
@@ -110,6 +112,7 @@ const menuClose = document.getElementById("menuClose");
 const helpOpen = document.getElementById("helpOpen");
 const helpOverlay = document.getElementById("helpOverlay");
 const helpClose = document.getElementById("helpClose");
+const updateBanner = document.getElementById("updateBanner");
 const tourOverlay = document.getElementById("tourOverlay");
 const tourSpotlight = document.getElementById("tourSpotlight");
 const tourTooltip = document.getElementById("tourTooltip");
@@ -376,6 +379,13 @@ function updateCommunityUi(info) {
   if (communityAdminCodeGroup) communityAdminCodeGroup.hidden = isDirigente;
   if (communityApproveRole) communityApproveRole.hidden = true;
   if (communityCreateCellForm) communityCreateCellForm.classList.toggle("role-hidden", !isDirigente);
+
+  const isDevRole = effectiveRole === "developer";
+  if (developerOpen) developerOpen.hidden = !isDevRole && !devAuthenticated;
+  const communityOpenBtn = document.getElementById("communityOpen");
+  if (communityOpenBtn) communityOpenBtn.textContent = hasData ? "Mi comunidad" : "Unirme a la comunidad";
+  const pushResubBtn = document.getElementById("pushResubscribe");
+  if (pushResubBtn) pushResubBtn.hidden = !isDirigente && !isDevRole;
 }
 
 let communityActiveTab = "perfil";
@@ -3865,6 +3875,7 @@ initFooterNav();
 initFooterFlame();
 initHelpTabs();
 initTour();
+initUpdateBanner();
 const communityInfo = readCommunityInfo();
 updateCommunityUi(communityInfo);
 if (communityApiHint) communityApiHint.textContent = `API: ${getPushServerUrl()}`;
@@ -4495,6 +4506,71 @@ function closeMenu() {
   sideMenu.hidden = true;
 }
 
+/* ---- Sistema de actualizaciones ---- */
+let swRegistration = null;
+let updateBannerShown = false;
+
+function onSwRegistered(reg) {
+  swRegistration = reg;
+  const hadController = !!navigator.serviceWorker.controller;
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) return;
+    showUpdateBanner();
+  });
+
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data && event.data.type === "SW_UPDATED" && hadController) {
+      showUpdateBanner();
+    }
+  });
+
+  setInterval(() => {
+    reg.update().catch(() => {});
+  }, 30 * 60 * 1000);
+}
+
+function showUpdateBanner() {
+  if (updateBannerShown || !updateBanner) return;
+  updateBannerShown = true;
+  updateBanner.hidden = false;
+}
+
+function initUpdateBanner() {
+  const versionEl = document.getElementById("appVersionDisplay");
+  if (versionEl) versionEl.textContent = APP_VERSION;
+
+  const reloadBtn = document.getElementById("updateReloadBtn");
+  const dismissBtn = document.getElementById("updateDismissBtn");
+  const checkBtn = document.getElementById("checkUpdateBtn");
+
+  if (reloadBtn) reloadBtn.addEventListener("click", () => window.location.reload());
+  if (dismissBtn) dismissBtn.addEventListener("click", () => { if (updateBanner) updateBanner.hidden = true; });
+  if (checkBtn) checkBtn.addEventListener("click", checkForUpdate);
+}
+
+function checkForUpdate() {
+  const btn = document.getElementById("checkUpdateBtn");
+  if (!swRegistration) {
+    showCtxTip("upToDate");
+    return;
+  }
+  if (btn) btn.textContent = "Buscando...";
+  let found = false;
+  const onFound = () => { found = true; };
+  swRegistration.addEventListener("updatefound", onFound, { once: true });
+  swRegistration.update().then(() => {
+    setTimeout(() => {
+      swRegistration.removeEventListener("updatefound", onFound);
+      if (btn) btn.textContent = "Buscar actualizaciones";
+      if (!found && !updateBannerShown) showCtxTip("upToDate");
+    }, 3500);
+  }).catch(() => {
+    if (btn) btn.textContent = "Buscar actualizaciones";
+    showCtxTip("updateError");
+  });
+}
+
 function openHelp(tab) {
   if (!helpOverlay) return;
   if (tab) switchHelpTab(tab);
@@ -4681,7 +4757,9 @@ function initTour() {
 const CTX_TIPS = {
   comunidad: "Completa tu perfil de comunidad para aparecer en el mapa de tu iglesia.",
   lectura_plena: "En lectura plena, desliza hacia arriba para compartir el versiculo.",
-  resaltado: "Arrastra sobre el texto para resaltar versiculos. Mantelo presionado para notas."
+  resaltado: "Arrastra sobre el texto para resaltar versiculos. Mantelo presionado para notas.",
+  upToDate: "Ya tenes la ultima version instalada.",
+  updateError: "No se pudo verificar. Revisa tu conexion."
 };
 
 function showCtxTip(key) {

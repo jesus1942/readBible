@@ -1,11 +1,11 @@
-const CACHE_NAME = "bibleapp-pwa-v111";
+const CACHE_NAME = "bibleapp-pwa-v112";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./core.js?v=2",
   "./net.js?v=2",
-  "./app.js?v=88",
+  "./app.js?v=89",
   "./daily_verses.json",
   "./efemerides.json",
   "./manifest.json",
@@ -23,13 +23,15 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
+    caches.keys().then(async (keys) => {
+      await Promise.all(
         keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-      )
-    )
+      );
+      await self.clients.claim();
+      const all = await self.clients.matchAll({ type: "window" });
+      all.forEach((client) => client.postMessage({ type: "SW_UPDATED", version: CACHE_NAME }));
+    })
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
@@ -56,9 +58,7 @@ self.addEventListener("push", (event) => {
     body: payload.body || "",
     icon: "./icons/icon-192.png",
     badge: "./icons/icon-192.png",
-    data: {
-      url: payload.url || "./"
-    }
+    data: { url: payload.url || "./" }
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
@@ -69,10 +69,7 @@ self.addEventListener("notificationclick", (event) => {
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
       const existing = clientList.find((client) => client.url === url);
-      if (existing) {
-        existing.focus();
-        return null;
-      }
+      if (existing) { existing.focus(); return null; }
       return clients.openWindow(url);
     })
   );

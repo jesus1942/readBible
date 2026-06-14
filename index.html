@@ -160,6 +160,12 @@
       </div>
     </div>
 
+    <div id="updateBanner" class="update-banner" hidden>
+      <p class="update-banner-text">Nueva version disponible</p>
+      <button id="updateReloadBtn" class="update-banner-btn" type="button">Recargar</button>
+      <button id="updateDismissBtn" class="update-banner-dismiss" type="button" aria-label="Cerrar">✕</button>
+    </div>
+
     <div id="sideMenu" class="side-menu" hidden>
       <div class="side-menu-panel" role="dialog" aria-label="Menu">
         <div class="side-menu-header">
@@ -170,6 +176,7 @@
           <p class="eyebrow">Acciones</p>
           <button id="helpOpen" class="ghost">Ayuda guiada</button>
           <button id="communityOpen" class="ghost">Configurar comunidad</button>
+          <button id="checkUpdateBtn" class="ghost">Buscar actualizaciones</button>
         </div>
         <div class="side-menu-about">
           <p class="eyebrow">Marcadores</p>
@@ -214,6 +221,7 @@
           <p class="eyebrow">Acerca de</p>
           <p class="about-text about-story">Esta app es un proyecto hecho con amor a la Palabra. Durante el dia trabajo instalando y manteniendo piletas y calderas. Las madrugadas y los ratos libres son para esto: construir un lugar donde la Biblia este siempre cerca, sin distracciones ni costos. Si te suma, te pido que lo apoyes.</p>
           <a class="btn-donation" id="donationBtn" href="https://link.mercadopago.com.ar/jesusolguinsystem" target="_blank" rel="noopener">Apoyar el proyecto</a>
+          <p class="app-version-label">Version <span id="appVersionDisplay"></span></p>
           <button id="developerOpen" class="ghost" style="margin-top:6px">Panel dev</button>
         </div>
       </div>
@@ -537,12 +545,14 @@
     ></script>
     <script src="core.js?v=2"></script>
     <script src="net.js?v=2"></script>
-    <script src="app.js?v=88"></script>
+    <script src="app.js?v=89"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;
       if ("serviceWorker" in navigator && canRegister) {
-        navigator.serviceWorker.register("service-worker.js");
+        navigator.serviceWorker.register("service-worker.js").then((reg) => {
+          if (typeof onSwRegistered === "function") onSwRegistered(reg);
+        });
       }
     </script>
   </body>
