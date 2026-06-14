@@ -4068,6 +4068,7 @@ function startSplashAnimation() {
     startTime = performance.now();
     lastNow = startTime;
     finished = false;
+    initEmbers();
   }
 
   function project(p, cx, cy, scale, rotY, rotX) {
@@ -4105,6 +4106,103 @@ function startSplashAnimation() {
     vg.addColorStop(1, "rgba(0,0,0,0.35)");
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, W, H);
+  }
+
+  const EMBER_COLORS = ["#f39c12","#c0641a","#e07828","#f5c96b","#a03010","#7a1a0a","#f2a040","#ffcc44"];
+  const EMBER_COUNT = isMobile ? 160 : 280;
+  let embers = [];
+
+  function makeEmber() {
+    return {
+      x: rand(-W * 0.05, W * 1.05),
+      y: rand(H * 0.5, H * 1.15),
+      vx: rand(-0.5, 0.5) * dpr,
+      vy: rand(-3.2, -1.0) * dpr,
+      life: 0,
+      maxLife: rand(1.4, 3.2),
+      size: rand(0.9, 3.8) * dpr,
+      colorIdx: (Math.random() * EMBER_COLORS.length) | 0,
+      freq1: rand(2.8, 5.8),
+      freq2: rand(1.4, 3.4),
+      freq3: rand(6.0, 12.0),
+      amp1: rand(1.2, 3.2) * dpr,
+      amp2: rand(0.5, 1.4) * dpr,
+      amp3: rand(0.15, 0.55) * dpr,
+      phase1: rand(0, Math.PI * 2),
+      phase2: rand(0, Math.PI * 2),
+      phase3: rand(0, Math.PI * 2),
+      spiral: Math.random() < 0.35,
+      spiralR: rand(1.0, 2.5) * dpr,
+      spiralFreq: rand(3.5, 8.0) * (Math.random() < 0.5 ? 1 : -1),
+      drift: rand(-0.12, 0.12) * dpr
+    };
+  }
+
+  function initEmbers() {
+    embers = [];
+    for (let i = 0; i < EMBER_COUNT; i++) {
+      const e = makeEmber();
+      e.life = rand(0, e.maxLife * 0.9);
+      e.y = rand(0, H * 1.1);
+      embers.push(e);
+    }
+  }
+
+  function stepAndDrawEmbers(dt) {
+    if (prefersReducedMotion) return;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+
+    for (let i = 0; i < embers.length; i++) {
+      const e = embers[i];
+      e.life += dt;
+      if (e.life >= e.maxLife) {
+        embers[i] = makeEmber();
+        continue;
+      }
+
+      const lf = e.life / e.maxLife;
+
+      const tx = e.amp1 * Math.sin(e.freq1 * e.life + e.phase1)
+               + e.amp2 * Math.sin(e.freq2 * e.life * 2.7 + e.phase2)
+               + e.amp3 * Math.sin(e.freq3 * e.life + e.phase3)
+               + (e.spiral ? e.spiralR * Math.cos(e.spiralFreq * e.life) : 0);
+
+      e.x += (e.vx + tx + e.drift) * dt * 60;
+      e.y += e.vy * dt * 60;
+      if (lf < 0.45) e.vy -= 0.055 * dpr * dt * 60;
+
+      let a;
+      if (lf < 0.12) a = lf / 0.12;
+      else if (lf < 0.72) a = 1.0;
+      else a = 1 - (lf - 0.72) / 0.28;
+      a = clamp(a, 0, 1) * 0.42;
+
+      const s = e.size * (0.55 + 0.7 * Math.sin(Math.PI * lf));
+      if (a <= 0.004 || s <= 0.3) continue;
+
+      const color = EMBER_COLORS[e.colorIdx];
+
+      ctx.globalAlpha = a * 0.28;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, s * 3.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = a * 0.55;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, s * 1.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = a;
+      ctx.fillStyle = lf < 0.55 ? "#fff8e4" : color;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, Math.max(0.4, s * 0.6), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
   }
 
   function getPhase(t) {
@@ -4150,6 +4248,7 @@ function startSplashAnimation() {
     const ph = getPhase(tt);
 
     drawBackground();
+    stepAndDrawEmbers(dt);
 
     const cx = W * 0.5;
     const cy = H * 0.47;
