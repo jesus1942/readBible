@@ -1381,6 +1381,12 @@ async function loadSuperadminSettings() {
     const current = item.configured
       ? `<small class="sa-current">Actual: ${escapeHtml(item.preview)}${item.source === "env" ? " (variable de entorno)" : ""}</small>`
       : "";
+    const guide = (item.guide || []).length
+      ? `<details class="sa-guide">
+          <summary>Como conseguirlo, paso a paso</summary>
+          <ol>${item.guide.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>
+        </details>`
+      : "";
     return `
       <div class="sa-field" data-setting-key="${escapeHtml(item.key)}">
         <div class="sa-field-head">
@@ -1388,6 +1394,7 @@ async function loadSuperadminSettings() {
           ${state}
         </div>
         <small>${escapeHtml(item.hint)}</small>
+        ${guide}
         ${current}
         <div class="sa-field-row">
           <input type="${item.secret ? "password" : "text"}" class="sa-setting-input" placeholder="${item.configured ? "Nuevo valor (vacio no cambia nada)" : "Pegar valor aqui"}" />

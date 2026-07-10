@@ -1050,43 +1050,85 @@ const APP_SETTING_DEFS = [
     key: "GOOGLE_CLIENT_ID_WEB",
     label: "Google OAuth Client ID (web)",
     hint: "Termina en .apps.googleusercontent.com. Se crea en Google Cloud Console > Credenciales.",
-    secret: false
+    secret: false,
+    guide: [
+      "Entra a console.cloud.google.com con tu cuenta de Google y crea un proyecto nuevo (nombre sugerido: readBible).",
+      "En el menu de la izquierda anda a APIs y servicios > Pantalla de consentimiento OAuth. Tipo de usuario: Externo. Completa nombre de la app (Lectura Viva), tu email de soporte y tu email de contacto. Guarda y toca Publicar aplicacion.",
+      "Anda a APIs y servicios > Credenciales > Crear credenciales > ID de cliente de OAuth.",
+      "Tipo de aplicacion: Aplicacion web. Nombre: readBible web.",
+      "En Origenes de JavaScript autorizados agrega: https://jesus1942.github.io y tambien http://localhost:8000 (para pruebas).",
+      "Toca Crear. Copia el ID de cliente (termina en .apps.googleusercontent.com) y pegalo aca. No necesitas el secreto de cliente para este flujo."
+    ]
   },
   {
     key: "GOOGLE_CLIENT_ID_ANDROID",
     label: "Google OAuth Client ID (Android)",
     hint: "Client ID nativo para la app Capacitor de Android.",
-    secret: false
+    secret: false,
+    guide: [
+      "En el mismo proyecto de Google Cloud: APIs y servicios > Credenciales > Crear credenciales > ID de cliente de OAuth.",
+      "Tipo de aplicacion: Android.",
+      "Nombre del paquete: com.lecturaviva.app",
+      "Huella digital SHA-1: en tu maquina, con el keystore con el que firmas la app, corre: keytool -list -v -keystore TU_KEYSTORE.jks y copia el valor SHA1.",
+      "Toca Crear, copia el ID de cliente y pegalo aca. Este paso recien hace falta cuando publiquemos el login en la app Android; podes dejarlo pendiente."
+    ]
   },
   {
     key: "GOOGLE_CLIENT_ID_IOS",
     label: "Google OAuth Client ID (iOS)",
     hint: "Client ID nativo para la app Capacitor de iOS.",
-    secret: false
+    secret: false,
+    guide: [
+      "En el mismo proyecto de Google Cloud: APIs y servicios > Credenciales > Crear credenciales > ID de cliente de OAuth.",
+      "Tipo de aplicacion: iOS.",
+      "ID del paquete: com.lecturaviva.app",
+      "Toca Crear, copia el ID de cliente y pegalo aca. Igual que Android, recien hace falta al publicar la app iOS; podes dejarlo pendiente."
+    ]
   },
   {
     key: "MP_ACCESS_TOKEN",
     label: "MercadoPago Access Token",
     hint: "Credencial privada de produccion (empieza con APP_USR-). Panel de MercadoPago > Tus integraciones.",
-    secret: true
+    secret: true,
+    guide: [
+      "Entra a mercadopago.com.ar/developers/panel con la cuenta de MercadoPago que va a recibir los cobros.",
+      "Toca Crear aplicacion. Nombre: readBible. Tipo de solucion: Pagos online. Producto: Suscripciones (si te pregunta, marca que NO usas plataforma de ecommerce).",
+      "Entra a la aplicacion creada y anda a Credenciales de produccion (te puede pedir completar datos del negocio la primera vez).",
+      "Copia el Access Token (empieza con APP_USR-) y pegalo aca. Es la credencial mas sensible: no la compartas ni la mandes por mensaje."
+    ]
   },
   {
     key: "MP_PUBLIC_KEY",
     label: "MercadoPago Public Key",
     hint: "Credencial publica de produccion.",
-    secret: false
+    secret: false,
+    guide: [
+      "En la misma pantalla de Credenciales de produccion de tu aplicacion de MercadoPago, copia la Public Key y pegala aca."
+    ]
   },
   {
     key: "MP_WEBHOOK_SECRET",
     label: "MercadoPago Webhook Secret",
     hint: "Clave secreta para validar la firma de las notificaciones webhook.",
-    secret: true
+    secret: true,
+    guide: [
+      "En tu aplicacion del panel de MercadoPago anda a Webhooks > Configurar notificaciones.",
+      "Modo: Produccion. URL: https://versiculodiario-production.up.railway.app/billing/webhook",
+      "Eventos: marca Suscripciones (subscription_preapproval y subscription_authorized_payment) y Pagos (payments).",
+      "Al guardar, MercadoPago te muestra una Clave secreta para validar la firma. Copiala y pegala aca.",
+      "Nota: el endpoint /billing/webhook lo activo en la fase de MercadoPago; podes cargar esto igual desde ya."
+    ]
   },
   {
     key: "ADMIN_PLAN_PRICE_ARS",
     label: "Precio mensual del panel admin (ARS)",
     hint: "Solo el numero, sin puntos ni simbolo. Ej: 15000",
-    secret: false
+    secret: false,
+    guide: [
+      "Este lo decidis vos, no se saca de ningun panel.",
+      "Referencia de la investigacion de mercado: la competencia regional cobra entre 10 y 25 USD por mes por iglesia; SARA (lider en la region) arranca en unos 22 USD.",
+      "Escribi solo el numero en pesos argentinos, sin puntos ni simbolo. Ejemplo: 15000"
+    ]
   }
 ];
 
@@ -1216,6 +1258,7 @@ app.get("/superadmin/settings", requireSuperadmin, async (req, res) => {
         label: def.label,
         hint: def.hint,
         secret: def.secret,
+        guide: def.guide || [],
         configured,
         source: dbRow ? "db" : (envValue ? "env" : ""),
         preview,
