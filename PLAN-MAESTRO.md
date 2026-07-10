@@ -56,25 +56,35 @@ siguen ese mismo patron sin herramienta externa.
 
 ## 3. Fases en detalle
 
-### Fase 0 — Cuentas reales sobre la identidad existente
+### Fase 0 — Cuentas reales con Google Sign-In (decision confirmada)
 
-Objetivo: que el usuario pueda registrarse con email y contrasena, iniciar
-sesion desde cualquier dispositivo y recuperar su espacio.
+Objetivo: que el usuario inicie sesion con su cuenta de Google desde cualquier
+dispositivo y recupere su espacio.
 
 Backend:
-- Extender `community_users`: `password_hash TEXT`, `email` ya existe (UNIQUE).
+- Extender `community_users`: `google_sub TEXT UNIQUE` (ID estable de Google),
+  `email` ya existe (UNIQUE), `avatar_url TEXT`.
 - Tabla nueva `community_sessions` (token aleatorio hasheado, user_id,
   expires_at, device_label). Token en header `Authorization: Bearer`.
-- Endpoints: `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`,
-  `GET /auth/me`. Hash con `scrypt` de Node (sin dependencias nuevas).
+- Endpoints: `POST /auth/google` (recibe el ID token de Google, verifica la
+  firma contra las claves publicas JWKS de Google con `crypto` de Node, sin
+  dependencias nuevas, y crea/actualiza el usuario + sesion propia),
+  `POST /auth/logout`, `GET /auth/me`.
 - Compatibilidad: al iniciar sesion en un dispositivo que ya tenia
-  `communityKey`, se vincula esa clave a la cuenta (merge de perfil). Los
-  usuarios existentes agregan email+contrasena desde su perfil sin perder nada.
+  `communityKey`, se vincula esa clave a la cuenta de Google (merge de
+  perfil). Los usuarios existentes no pierden nada.
 
 Frontend:
-- Landing de inicio de sesion: al abrir Comunidad sin sesion se ofrece
-  "Crear cuenta" / "Ya tengo cuenta" / "Continuar como invitado" (modo actual).
+- PWA web: boton "Continuar con Google" via Google Identity Services (script
+  oficial `accounts.google.com/gsi/client`).
+- Capacitor Android/iOS: plugin de Google Auth para el mismo flujo nativo
+  (el backend valida el mismo ID token, un solo endpoint para todo).
+- Landing: "Continuar con Google" / "Continuar como invitado" (modo actual).
 - El estado `communityState.auth` pasa a incluir el token de sesion.
+
+Prerequisito operativo (lo haces vos, te guio): crear el proyecto y el OAuth
+Client ID en Google Cloud Console, con los origenes autorizados
+(`jesus1942.github.io`) y los client IDs de Android/iOS para Capacitor.
 
 Mockup de la landing de sesion:
 
@@ -82,14 +92,9 @@ Mockup de la landing de sesion:
     |          readBible               |
     |   "Lampara es a mis pies..."     |
     |                                  |
-    |  [ Iniciar sesion            ]   |
-    |  [ Crear mi cuenta           ]   |
+    |  [ G  Continuar con Google  ]    |
     |  ( continuar como invitado )     |
     +----------------------------------+
-
-Decision pendiente (recomendacion incluida en seccion 5): contrasena clasica
-vs codigo por email. Recomiendo contrasena clasica primero porque no requiere
-contratar un proveedor de envio de emails.
 
 ### Fase 1 — Modulo de devocionales
 
@@ -150,21 +155,25 @@ Backend:
   `check_in_method = 'geo'`. Fuera de radio: rechaza con distancia informada.
   El check-in manual queda como respaldo con `method = 'manual'`.
 - Presencia en vivo: tabla `community_presence`
-  (`event_id, user_id, role, last_ping_at`, UNIQUE(event_id, user_id)).
-  El cliente manda un ping cada 3 minutos mientras el evento esta `live` y la
-  app abierta; una presencia expira a los 10 minutos sin ping. Al cerrar
-  sesion del evento se hace check-out.
-- Endpoint agregado `GET /community/live-map`: por cada sede activa devuelve
-  `{ locationId, lat, lng, feligreses: N, personal: M }` (personal =
-  colaborador + dirigente). Privacidad: NUNCA devuelve coordenadas ni nombres
-  individuales, solo conteos por sede.
+  (`event_id, user_id, role, latitude, longitude, last_ping_at`,
+  UNIQUE(event_id, user_id)). El cliente manda un ping con su posicion cada
+  3 minutos mientras el evento esta `live` y la app abierta; una presencia
+  expira a los 10 minutos sin ping. Al salir del evento se hace check-out.
+- Endpoint `GET /community/live-map` (decision confirmada: puntos
+  individuales anonimos): por cada sede con evento en vivo devuelve
+  `{ locationId, points: [{ lat, lng, kind: 'feligres'|'personal' }] }`
+  (personal = colaborador + dirigente). Anonimato estricto: sin nombres, sin
+  user_id, sin rol exacto; solo se aceptan y devuelven posiciones dentro del
+  radio de la sede; las posiciones crudas se borran al finalizar el evento
+  (queda solo la asistencia agregada para KPIs).
 - Transicion automatica de eventos `scheduled -> live -> finished` segun
   `starts_at`/`ends_at` (job en el mismo intervalo que ya usa el push diario).
 
 Frontend:
-- En el mapa de sedes, cada sede con evento en vivo muestra un racimo de
-  puntos: dorados (#f39c12) para feligreses, marrones (#5f5a50) para personal,
-  con el conteo al lado. Actualizacion cada 60 s.
+- En el mapa de sedes, cada sede con evento en vivo muestra los puntos
+  individuales anonimos en su posicion real: dorados (#f39c12) para
+  feligreses, marrones (#5f5a50) para personal, con el conteo total al lado.
+  Actualizacion cada 60 s.
 - Flujo del asistente: llega a la sede, la app detecta evento en vivo cercano
   y ofrece "Registrar mi llegada" (pide permiso de geolocalizacion solo ahi).
 
@@ -234,14 +243,19 @@ Frontend — panel admin (overlay `adminOverlay`, acceso desde la landing):
 
 ### Fase 4 — Suscripcion recurrente con MercadoPago
 
-Objetivo: la vista admin es de pago. Modelo freemium: el panel se puede
-activar con prueba gratis de 30 dias, despues requiere suscripcion activa.
+Objetivo (decision confirmada): el panel se habilita solo despues de
+autorizar la suscripcion en MercadoPago, con 30 dias de prueba gratis. El
+medio de pago queda cargado y autorizado desde el dia uno; el primer cobro
+real cae al dia 31. MercadoPago Preapproval soporta esto nativamente con
+`free_trial` en el plan de suscripcion.
 
 Backend:
 - Tabla `church_subscriptions`:
-  `id, church TEXT UNIQUE, status ('trial','active','past_due','cancelled'),
+  `id, church TEXT UNIQUE,
+  status ('trialing','active','past_due','cancelled'),
   trial_ends_at, mp_preapproval_id TEXT, current_period_end,
   created_by_user_id, created_at, updated_at`.
+  `trialing` = preapproval autorizado, dentro de los 30 dias sin cobro.
 - Integracion MercadoPago Preapproval (suscripcion recurrente):
   - `POST /billing/subscribe`: crea el preapproval via API de MercadoPago y
     devuelve el `init_point` para redirigir al checkout.
@@ -250,14 +264,16 @@ Backend:
     Verificacion de firma del webhook.
   - `GET /billing/status`: estado para mostrar en el panel.
 - Middleware `requireActiveSubscription(church)` que protege los endpoints
-  `/admin/*` (durante `trial` tambien pasa).
+  `/admin/*` (pasa con `trialing` o `active`; sin preapproval autorizado no
+  hay acceso, ni siquiera en prueba).
 - Variables de entorno nuevas en Railway: `MP_ACCESS_TOKEN`,
   `MP_WEBHOOK_SECRET`, `ADMIN_PLAN_PRICE`.
 
 Frontend:
 - En la landing, si el usuario es admin de iglesia: tarjeta "Panel de mi
-  iglesia" con estado (prueba, activa, vencida) y boton de suscripcion que
-  abre el checkout de MercadoPago.
+  iglesia" con estado (en prueba con dias restantes, activa, vencida, sin
+  suscripcion) y boton "Activar 30 dias gratis" que abre el checkout de
+  MercadoPago para autorizar el medio de pago.
 - Sin suscripcion: el panel se muestra bloqueado con vista previa borrosa de
   los KPIs y el llamado a suscribirse.
 
@@ -277,8 +293,8 @@ Frontend:
 
 | # | Entrega | Contenido | Tamano estimado |
 |---|---------|-----------|-----------------|
-| 1 | Auth backend | tablas + endpoints de registro/login/sesion | chico |
-| 2 | Auth frontend | landing de sesion + vinculacion de communityKey | mediano |
+| 1 | Auth backend | sesiones + verificacion de ID token de Google | chico |
+| 2 | Auth frontend | boton Google en landing + vinculacion de communityKey | mediano |
 | 3 | Devocionales backend | tabla + CRUD + racha | chico |
 | 4 | Devocionales frontend | overlay, calendario, borrador offline | grande |
 | 5 | Geo check-in | validacion Haversine + metodo geo | chico |
@@ -292,15 +308,17 @@ Frontend:
 Cada entrega deja produccion funcionando; ninguna rompe a los usuarios
 actuales (la identidad por dispositivo sigue valida como modo invitado).
 
-## 5. Decisiones que necesito confirmar
+## 5. Decisiones confirmadas (2026-07-10)
 
-1. Metodo de login. Recomiendo email + contrasena (hash scrypt, sin servicios
-   externos). La alternativa (codigo por email) requiere contratar un
-   proveedor de envio de correos que hoy no existe en el stack.
-2. Precio y prueba. Recomiendo prueba gratis de 30 dias y un plan unico
-   mensual por iglesia (precio a definir por vos en ARS).
-3. Privacidad del mapa. Recomiendo mostrar solo conteos agregados por sede
-   (nunca la posicion individual de una persona). Confirmar que estas de
-   acuerdo, porque es una decision de producto ademas de tecnica.
-4. Quien asigna el admin de iglesia. Recomiendo: developer y dirigentes de esa
-   iglesia pueden asignarlo.
+1. Login: Google Sign-In. Requiere que el dueno cree el OAuth Client ID en
+   Google Cloud Console (guiado en la fase 0).
+2. Mapa en vivo: puntos individuales anonimos en su posicion real, con
+   anonimato estricto (sin nombres ni identificadores) y borrado de
+   posiciones crudas al finalizar cada evento.
+3. Cobro del panel admin: 30 dias de prueba gratis, pero con el medio de
+   pago de MercadoPago cargado y autorizado desde el dia uno (preapproval
+   con free_trial); el primer cobro cae al dia 31. Precio mensual por
+   iglesia en ARS a definir antes de la fase 4.
+
+Pendiente menor: quien asigna el admin de iglesia. Propuesta por defecto:
+developer y dirigentes de esa iglesia pueden asignarlo.
