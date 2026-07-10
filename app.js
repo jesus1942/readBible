@@ -1,4 +1,4 @@
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.3.0";
 
 const versions = [
   "RVR1960", "RVC", "NVI", "NBLA", "LBLA", "NTV",
@@ -199,6 +199,24 @@ const developerChurchList = document.getElementById("developerChurchList");
 const developerCellList = document.getElementById("developerCellList");
 const devRefreshChurches = document.getElementById("devRefreshChurches");
 const developerOpen = document.getElementById("developerOpen");
+const superadminOpen = document.getElementById("superadminOpen");
+const superadminOverlay = document.getElementById("superadminOverlay");
+const superadminClose = document.getElementById("superadminClose");
+const superadminLoginSection = document.getElementById("superadminLoginSection");
+const superadminEmailInput = document.getElementById("superadminEmailInput");
+const superadminPasswordInput = document.getElementById("superadminPasswordInput");
+const superadminLoginBtn = document.getElementById("superadminLoginBtn");
+const superadminLoginStatus = document.getElementById("superadminLoginStatus");
+const superadminPanel = document.getElementById("superadminPanel");
+const superadminSettingsList = document.getElementById("superadminSettingsList");
+const superadminConfigSection = document.getElementById("superadminConfigSection");
+const superadminAccountSection = document.getElementById("superadminAccountSection");
+const superadminCurrentPassword = document.getElementById("superadminCurrentPassword");
+const superadminNewPassword = document.getElementById("superadminNewPassword");
+const superadminChangePasswordBtn = document.getElementById("superadminChangePasswordBtn");
+const superadminLogoutBtn = document.getElementById("superadminLogoutBtn");
+const superadminSessionInfo = document.getElementById("superadminSessionInfo");
+const superadminStatus = document.getElementById("superadminStatus");
 const pickerBtn = document.getElementById("pickerBtn");
 const pickerOverlay = document.getElementById("pickerOverlay");
 const pickerClose = document.getElementById("pickerClose");
@@ -1243,6 +1261,201 @@ function renderDeveloperCells() {
       <span class="dev-badge active">activa</span>
     </div>
   `).join("");
+}
+
+function getSuperadminToken() {
+  try {
+    return localStorage.getItem("superadminToken") || "";
+  } catch {
+    return "";
+  }
+}
+
+function setSuperadminToken(token) {
+  try {
+    if (token) localStorage.setItem("superadminToken", token);
+    else localStorage.removeItem("superadminToken");
+  } catch {
+    // sin storage disponible, la sesion dura lo que dure la pagina
+  }
+}
+
+function setSuperadminStatus(message, isError) {
+  if (!superadminStatus) return;
+  superadminStatus.textContent = message || "";
+  superadminStatus.style.color = isError ? "#a33" : "";
+}
+
+async function superadminRequest(path, options) {
+  const opts = { ...(options || {}) };
+  opts.headers = { ...(opts.headers || {}) };
+  const token = getSuperadminToken();
+  if (token) opts.headers.Authorization = `Bearer ${token}`;
+  if (opts.body && !opts.headers["Content-Type"]) {
+    opts.headers["Content-Type"] = "application/json";
+  }
+  let response;
+  try {
+    response = await fetch(`${getPushServerUrl()}${path}`, opts);
+  } catch {
+    throw new Error(`No pude conectar con la API en ${getPushServerUrl()}.`);
+  }
+  const data = await response.json().catch(() => ({}));
+  if (response.status === 401 && path !== "/superadmin/login") {
+    setSuperadminToken("");
+    showSuperadminLogin();
+    throw new Error("La sesion expiro. Ingresa de nuevo.");
+  }
+  if (!response.ok) {
+    throw new Error(data.error || `request failed (${response.status})`);
+  }
+  return data;
+}
+
+function showSuperadminLogin() {
+  if (superadminLoginSection) superadminLoginSection.hidden = false;
+  if (superadminPanel) superadminPanel.hidden = true;
+}
+
+function showSuperadminPanel() {
+  if (superadminLoginSection) superadminLoginSection.hidden = true;
+  if (superadminPanel) superadminPanel.hidden = false;
+}
+
+async function openSuperadminPanel() {
+  if (!superadminOverlay) return;
+  superadminOverlay.hidden = false;
+  setSuperadminStatus("");
+  if (superadminLoginStatus) superadminLoginStatus.textContent = "";
+  if (getSuperadminToken()) {
+    showSuperadminPanel();
+    try {
+      await loadSuperadminSettings();
+    } catch (error) {
+      setSuperadminStatus(error.message, true);
+    }
+  } else {
+    showSuperadminLogin();
+  }
+}
+
+function closeSuperadminPanel() {
+  if (superadminOverlay) superadminOverlay.hidden = true;
+}
+
+async function superadminLogin() {
+  const email = superadminEmailInput ? superadminEmailInput.value.trim() : "";
+  const password = superadminPasswordInput ? superadminPasswordInput.value : "";
+  if (!email || !password) {
+    if (superadminLoginStatus) superadminLoginStatus.textContent = "Completa email y contrasena.";
+    return;
+  }
+  if (superadminLoginStatus) superadminLoginStatus.textContent = "Verificando...";
+  try {
+    const data = await superadminRequest("/superadmin/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password })
+    });
+    setSuperadminToken(data.token);
+    if (superadminPasswordInput) superadminPasswordInput.value = "";
+    if (superadminLoginStatus) superadminLoginStatus.textContent = "";
+    if (superadminSessionInfo) {
+      superadminSessionInfo.textContent = `Sesion de ${data.email}, valida por ${data.expiresDays} dias en este dispositivo.`;
+    }
+    showSuperadminPanel();
+    await loadSuperadminSettings();
+  } catch (error) {
+    if (superadminLoginStatus) superadminLoginStatus.textContent = error.message || "No pude iniciar sesion.";
+  }
+}
+
+async function loadSuperadminSettings() {
+  if (!superadminSettingsList) return;
+  superadminSettingsList.innerHTML = `<p class="community-empty">Cargando configuracion...</p>`;
+  const data = await superadminRequest("/superadmin/settings");
+  const settings = data.settings || [];
+  superadminSettingsList.innerHTML = settings.map((item) => {
+    const state = item.configured
+      ? `<span class="dev-badge active">configurado</span>`
+      : `<span class="dev-badge">pendiente</span>`;
+    const current = item.configured
+      ? `<small class="sa-current">Actual: ${escapeHtml(item.preview)}${item.source === "env" ? " (variable de entorno)" : ""}</small>`
+      : "";
+    return `
+      <div class="sa-field" data-setting-key="${escapeHtml(item.key)}">
+        <div class="sa-field-head">
+          <p>${escapeHtml(item.label)}</p>
+          ${state}
+        </div>
+        <small>${escapeHtml(item.hint)}</small>
+        ${current}
+        <div class="sa-field-row">
+          <input type="${item.secret ? "password" : "text"}" class="sa-setting-input" placeholder="${item.configured ? "Nuevo valor (vacio no cambia nada)" : "Pegar valor aqui"}" />
+          <button class="sa-setting-save" type="button">Guardar</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+async function saveSuperadminSetting(fieldEl) {
+  const key = fieldEl.getAttribute("data-setting-key");
+  const input = fieldEl.querySelector(".sa-setting-input");
+  const value = input ? input.value.trim() : "";
+  if (!value) {
+    setSuperadminStatus("Pega el valor antes de guardar.", true);
+    return;
+  }
+  try {
+    await superadminRequest("/superadmin/settings", {
+      method: "POST",
+      body: JSON.stringify({ key, value })
+    });
+    setSuperadminStatus(`Guardado: ${key}`, false);
+    await loadSuperadminSettings();
+  } catch (error) {
+    setSuperadminStatus(error.message, true);
+  }
+}
+
+async function superadminChangePassword() {
+  const current = superadminCurrentPassword ? superadminCurrentPassword.value : "";
+  const next = superadminNewPassword ? superadminNewPassword.value : "";
+  if (next.length < 8) {
+    setSuperadminStatus("La contrasena nueva debe tener al menos 8 caracteres.", true);
+    return;
+  }
+  try {
+    await superadminRequest("/superadmin/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword: current, newPassword: next })
+    });
+    if (superadminCurrentPassword) superadminCurrentPassword.value = "";
+    if (superadminNewPassword) superadminNewPassword.value = "";
+    setSuperadminStatus("Contrasena cambiada. Las otras sesiones se cerraron.", false);
+  } catch (error) {
+    setSuperadminStatus(error.message, true);
+  }
+}
+
+async function superadminLogout() {
+  try {
+    await superadminRequest("/superadmin/logout", { method: "POST" });
+  } catch {
+    // igual se limpia el token local
+  }
+  setSuperadminToken("");
+  showSuperadminLogin();
+  setSuperadminStatus("");
+}
+
+function switchSuperadminTab(tab) {
+  const isConfig = tab === "config";
+  if (superadminConfigSection) superadminConfigSection.hidden = !isConfig;
+  if (superadminAccountSection) superadminAccountSection.hidden = isConfig;
+  document.querySelectorAll(".sa-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.getAttribute("data-sa-tab") === tab);
+  });
 }
 
 function applyDevRole(role) {
@@ -3852,6 +4065,50 @@ addListener(devRefreshChurches, "click", () => {
   renderDeveloperChurches();
   renderDeveloperCells();
 });
+
+addListener(superadminOpen, "click", () => {
+  closeMenu();
+  openSuperadminPanel();
+});
+
+addListener(superadminClose, "click", closeSuperadminPanel);
+
+addListener(superadminOverlay, "click", (event) => {
+  if (event.target === superadminOverlay) closeSuperadminPanel();
+});
+
+addListener(superadminLoginBtn, "click", () => {
+  superadminLogin();
+});
+
+addListener(superadminPasswordInput, "keydown", (event) => {
+  if (event.key === "Enter") superadminLogin();
+});
+
+addListener(superadminChangePasswordBtn, "click", () => {
+  superadminChangePassword();
+});
+
+addListener(superadminLogoutBtn, "click", () => {
+  superadminLogout();
+});
+
+if (superadminPanel) {
+  superadminPanel.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const tabBtn = target.closest(".sa-tab[data-sa-tab]");
+    if (tabBtn) {
+      switchSuperadminTab(tabBtn.getAttribute("data-sa-tab"));
+      return;
+    }
+    const saveBtn = target.closest(".sa-setting-save");
+    if (saveBtn) {
+      const field = saveBtn.closest(".sa-field");
+      if (field) saveSuperadminSetting(field);
+    }
+  });
+}
 
 if (developerPanel) {
   developerPanel.addEventListener("click", (event) => {

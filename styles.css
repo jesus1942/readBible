@@ -2037,6 +2037,79 @@ button:active {
   color: #7a2020;
 }
 
+/* display:grid de .community-section pisa el atributo hidden */
+.community-section[hidden],
+#superadminPanel[hidden],
+#developerPanel[hidden] {
+  display: none !important;
+}
+
+.sa-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.sa-tab {
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid #ead8ba;
+  background: #fffaf1;
+  color: #5b4630;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sa-tab.active {
+  background: #f2e0bf;
+  color: #3b2c19;
+}
+
+.sa-field {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fffaf1;
+  border: 1px solid #ead8ba;
+  margin-bottom: 8px;
+}
+
+.sa-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sa-field-head p {
+  margin: 0;
+  font-size: 13px;
+  color: #3b2c19;
+  font-weight: 600;
+}
+
+.sa-field small {
+  color: #7a5a2d;
+  font-weight: 400;
+}
+
+.sa-current {
+  word-break: break-all;
+}
+
+.sa-field-row {
+  display: flex;
+  gap: 8px;
+}
+
+.sa-field-row input {
+  flex: 1;
+  min-width: 0;
+}
+
 /* --- Role indicator badge --- */
 .role-indicator {
   display: inline-flex;

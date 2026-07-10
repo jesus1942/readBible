@@ -26,6 +26,12 @@ const CORS_ORIGINS = (process.env.CORS_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+const SUPERADMIN_SEED_EMAIL = process.env.SUPERADMIN_EMAIL || "denovaje@proton.me";
+// Hash scrypt (salt:hash) usado solo para sembrar la cuenta la primera vez;
+// despues manda lo que haya en la tabla superadmin_account.
+const SUPERADMIN_SEED_PASSWORD_HASH = process.env.SUPERADMIN_PASSWORD_HASH ||
+  "be3c3205c3f79810afbb0b2941dbcf9d:c428a1e6f9ad4d13cb793591603c06d7bd03f4da88f43c7c3a9db1dcd421c957df8f56d3bca1a99cef40684fae13f5cdbff53811b14124de8f56179b12e5c8cf";
+const SUPERADMIN_SESSION_DAYS = 7;
 
 if (!DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -62,7 +68,7 @@ app.use((req, res, next) => {
     res.setHeader("Vary", "Origin");
   }
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Cron-Secret, X-Community-Secret");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Cron-Secret, X-Community-Secret, Authorization");
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
@@ -479,6 +485,34 @@ async function ensureSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS community_study_materials_cell_idx ON community_study_materials (cell_id);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS community_study_materials_event_idx ON community_study_materials (event_id);`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS superadmin_account (
+      id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+      email TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS superadmin_sessions (
+      token_hash TEXT PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+  `);
+  await pool.query(
+    `INSERT INTO superadmin_account (id, email, password_hash)
+     VALUES (1, $1, $2)
+     ON CONFLICT (id) DO NOTHING`,
+    [SUPERADMIN_SEED_EMAIL, SUPERADMIN_SEED_PASSWORD_HASH]
+  );
 }
 
 function normalizeThemes(themes) {
@@ -1009,6 +1043,235 @@ app.post("/community/developer-auth", (req, res) => {
     return res.status(401).json({ error: "invalid developer code" });
   }
   return res.json({ ok: true });
+});
+
+const APP_SETTING_DEFS = [
+  {
+    key: "GOOGLE_CLIENT_ID_WEB",
+    label: "Google OAuth Client ID (web)",
+    hint: "Termina en .apps.googleusercontent.com. Se crea en Google Cloud Console > Credenciales.",
+    secret: false
+  },
+  {
+    key: "GOOGLE_CLIENT_ID_ANDROID",
+    label: "Google OAuth Client ID (Android)",
+    hint: "Client ID nativo para la app Capacitor de Android.",
+    secret: false
+  },
+  {
+    key: "GOOGLE_CLIENT_ID_IOS",
+    label: "Google OAuth Client ID (iOS)",
+    hint: "Client ID nativo para la app Capacitor de iOS.",
+    secret: false
+  },
+  {
+    key: "MP_ACCESS_TOKEN",
+    label: "MercadoPago Access Token",
+    hint: "Credencial privada de produccion (empieza con APP_USR-). Panel de MercadoPago > Tus integraciones.",
+    secret: true
+  },
+  {
+    key: "MP_PUBLIC_KEY",
+    label: "MercadoPago Public Key",
+    hint: "Credencial publica de produccion.",
+    secret: false
+  },
+  {
+    key: "MP_WEBHOOK_SECRET",
+    label: "MercadoPago Webhook Secret",
+    hint: "Clave secreta para validar la firma de las notificaciones webhook.",
+    secret: true
+  },
+  {
+    key: "ADMIN_PLAN_PRICE_ARS",
+    label: "Precio mensual del panel admin (ARS)",
+    hint: "Solo el numero, sin puntos ni simbolo. Ej: 15000",
+    secret: false
+  }
+];
+
+const appSettingsCache = { values: new Map(), loadedAt: 0 };
+
+async function getAppSetting(key) {
+  if (Date.now() - appSettingsCache.loadedAt > 60000) {
+    const { rows } = await pool.query(`SELECT key, value FROM app_settings`);
+    appSettingsCache.values = new Map(rows.map((row) => [row.key, row.value]));
+    appSettingsCache.loadedAt = Date.now();
+  }
+  const stored = appSettingsCache.values.get(key);
+  if (stored != null && stored !== "") return stored;
+  return process.env[key] || "";
+}
+
+function invalidateAppSettingsCache() {
+  appSettingsCache.loadedAt = 0;
+}
+
+function hashSuperadminPassword(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 64, { N: 16384, r: 8, p: 1 }).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+function verifySuperadminPassword(password, stored) {
+  const [salt, expected] = String(stored || "").split(":");
+  if (!salt || !expected) return false;
+  const actual = crypto.scryptSync(password, salt, 64, { N: 16384, r: 8, p: 1 });
+  const expectedBuf = Buffer.from(expected, "hex");
+  return actual.length === expectedBuf.length && crypto.timingSafeEqual(actual, expectedBuf);
+}
+
+function sha256Hex(value) {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+const superadminLoginAttempts = new Map();
+
+function superadminLoginBlocked(ip) {
+  const now = Date.now();
+  const attempts = (superadminLoginAttempts.get(ip) || []).filter((ts) => now - ts < 15 * 60 * 1000);
+  superadminLoginAttempts.set(ip, attempts);
+  return attempts.length >= 5;
+}
+
+function registerSuperadminLoginFailure(ip) {
+  const attempts = superadminLoginAttempts.get(ip) || [];
+  attempts.push(Date.now());
+  superadminLoginAttempts.set(ip, attempts);
+}
+
+function getBearerToken(req) {
+  const header = String(req.headers.authorization || "");
+  return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+}
+
+async function requireSuperadmin(req, res, next) {
+  try {
+    const token = getBearerToken(req);
+    if (!token) return res.status(401).json({ error: "missing token" });
+    const { rows } = await pool.query(
+      `SELECT token_hash FROM superadmin_sessions WHERE token_hash = $1 AND expires_at > NOW()`,
+      [sha256Hex(token)]
+    );
+    if (!rows.length) return res.status(401).json({ error: "invalid session" });
+    req.superadminTokenHash = rows[0].token_hash;
+    return next();
+  } catch (error) {
+    return res.status(500).json({ error: "auth check failed" });
+  }
+}
+
+app.post("/superadmin/login", async (req, res) => {
+  const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+  if (superadminLoginBlocked(ip)) {
+    return res.status(429).json({ error: "Demasiados intentos. Espera 15 minutos." });
+  }
+  const email = String(req.body && req.body.email || "").trim().toLowerCase();
+  const password = String(req.body && req.body.password || "");
+  if (!email || !password) return res.status(400).json({ error: "Falta email o contrasena." });
+  try {
+    const { rows } = await pool.query(`SELECT email, password_hash FROM superadmin_account WHERE id = 1`);
+    const account = rows[0];
+    const emailOk = account && account.email.toLowerCase() === email;
+    const passwordOk = account && verifySuperadminPassword(password, account.password_hash);
+    if (!emailOk || !passwordOk) {
+      registerSuperadminLoginFailure(ip);
+      return res.status(401).json({ error: "Credenciales incorrectas." });
+    }
+    const token = crypto.randomBytes(32).toString("hex");
+    await pool.query(`DELETE FROM superadmin_sessions WHERE expires_at <= NOW()`);
+    await pool.query(
+      `INSERT INTO superadmin_sessions (token_hash, expires_at)
+       VALUES ($1, NOW() + make_interval(days => $2))`,
+      [sha256Hex(token), SUPERADMIN_SESSION_DAYS]
+    );
+    return res.json({ ok: true, token, email: account.email, expiresDays: SUPERADMIN_SESSION_DAYS });
+  } catch (error) {
+    return res.status(500).json({ error: "No pude iniciar sesion." });
+  }
+});
+
+app.post("/superadmin/logout", requireSuperadmin, async (req, res) => {
+  await pool.query(`DELETE FROM superadmin_sessions WHERE token_hash = $1`, [req.superadminTokenHash]);
+  return res.json({ ok: true });
+});
+
+app.get("/superadmin/settings", requireSuperadmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT key, value, updated_at FROM app_settings`);
+    const stored = new Map(rows.map((row) => [row.key, row]));
+    const settings = APP_SETTING_DEFS.map((def) => {
+      const dbRow = stored.get(def.key);
+      const envValue = process.env[def.key] || "";
+      const value = dbRow ? dbRow.value : envValue;
+      const configured = Boolean(value);
+      let preview = "";
+      if (configured) {
+        preview = def.secret
+          ? `${"*".repeat(8)}${value.slice(-4)}`
+          : value;
+      }
+      return {
+        key: def.key,
+        label: def.label,
+        hint: def.hint,
+        secret: def.secret,
+        configured,
+        source: dbRow ? "db" : (envValue ? "env" : ""),
+        preview,
+        updatedAt: dbRow ? dbRow.updated_at : null
+      };
+    });
+    return res.json({ ok: true, settings });
+  } catch (error) {
+    return res.status(500).json({ error: "No pude leer la configuracion." });
+  }
+});
+
+app.post("/superadmin/settings", requireSuperadmin, async (req, res) => {
+  const key = String(req.body && req.body.key || "").trim();
+  const value = String(req.body && req.body.value || "").trim();
+  if (!APP_SETTING_DEFS.some((def) => def.key === key)) {
+    return res.status(400).json({ error: "Clave de configuracion desconocida." });
+  }
+  try {
+    if (!value) {
+      await pool.query(`DELETE FROM app_settings WHERE key = $1`, [key]);
+    } else {
+      await pool.query(
+        `INSERT INTO app_settings (key, value, updated_at)
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [key, value]
+      );
+    }
+    invalidateAppSettingsCache();
+    return res.json({ ok: true, key, configured: Boolean(value) });
+  } catch (error) {
+    return res.status(500).json({ error: "No pude guardar la configuracion." });
+  }
+});
+
+app.post("/superadmin/change-password", requireSuperadmin, async (req, res) => {
+  const currentPassword = String(req.body && req.body.currentPassword || "");
+  const newPassword = String(req.body && req.body.newPassword || "");
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: "La contrasena nueva debe tener al menos 8 caracteres." });
+  }
+  try {
+    const { rows } = await pool.query(`SELECT password_hash FROM superadmin_account WHERE id = 1`);
+    if (!rows.length || !verifySuperadminPassword(currentPassword, rows[0].password_hash)) {
+      return res.status(401).json({ error: "La contrasena actual no coincide." });
+    }
+    await pool.query(
+      `UPDATE superadmin_account SET password_hash = $1, updated_at = NOW() WHERE id = 1`,
+      [hashSuperadminPassword(newPassword)]
+    );
+    await pool.query(`DELETE FROM superadmin_sessions WHERE token_hash <> $1`, [req.superadminTokenHash]);
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(500).json({ error: "No pude cambiar la contrasena." });
+  }
 });
 
 app.get("/community/role-requests", async (req, res) => {

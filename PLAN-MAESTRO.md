@@ -42,6 +42,7 @@ Rama de trabajo: `claude/religious-app-plan-efbls4` — Produccion: `main`
 Orden elegido para que cada fase entregue valor por si sola y la siguiente se
 apoye en la anterior:
 
+    Consola superadmin (HECHA)          <- carga de credenciales del dueno
     Fase 0: Cuentas reales (login)      <- requisito de todo lo demas
     Fase 1: Devocionales                <- retiene usuarios, usa las cuentas
     Fase 2: Geo-presencia y mapa vivo   <- genera los datos de asistencia
@@ -55,6 +56,18 @@ en commits chicos y reversibles. El backend ya crea/migra tablas con
 siguen ese mismo patron sin herramienta externa.
 
 ## 3. Fases en detalle
+
+### Consola superadmin (implementada el 2026-07-10)
+
+Vista exclusiva del dueno (boton "Superadmin" en el menu lateral, junto a
+"Panel dev"). Login con email y contrasena propia (hash scrypt en la tabla
+`superadmin_account`, sesiones de 7 dias en `superadmin_sessions`, rate
+limit de 5 intentos por 15 minutos). Pestana Configuracion: carga de
+credenciales de integraciones (client IDs de Google, tokens de MercadoPago,
+precio del plan) en la tabla `app_settings`; el backend las lee con
+`getAppSetting()` con fallback a variables de entorno; los valores secretos
+se muestran enmascarados. Pestana Cuenta: cambio de contrasena y cierre de
+sesion. Las fases 0 y 4 consumen estas credenciales.
 
 ### Fase 0 — Cuentas reales con Google Sign-In (decision confirmada)
 

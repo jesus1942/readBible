@@ -223,6 +223,7 @@
           <a class="btn-donation" id="donationBtn" href="https://link.mercadopago.com.ar/jesusolguinsystem" target="_blank" rel="noopener">Apoyar el proyecto</a>
           <p class="app-version-label">Version <span id="appVersionDisplay"></span></p>
           <button id="developerOpen" class="ghost" style="margin-top:6px">Panel dev</button>
+          <button id="superadminOpen" class="ghost" style="margin-top:6px">Superadmin</button>
         </div>
       </div>
     </div>
@@ -537,6 +538,51 @@
       </div>
     </div>
 
+    <!-- Superadmin overlay -->
+    <div id="superadminOverlay" class="developer-overlay" hidden>
+      <div class="sheet-card">
+        <div class="side-menu-header">
+          <p class="eyebrow">Superadmin</p>
+          <button id="superadminClose" class="btn-close" aria-label="Cerrar">&#10005;</button>
+        </div>
+        <div id="superadminLoginSection" class="community-section">
+          <p class="eyebrow">Acceso exclusivo</p>
+          <label for="superadminEmailInput">Email</label>
+          <input id="superadminEmailInput" type="email" autocomplete="username" placeholder="tu@email.com" />
+          <label for="superadminPasswordInput">Contrasena</label>
+          <input id="superadminPasswordInput" type="password" autocomplete="current-password" placeholder="Contrasena" />
+          <button id="superadminLoginBtn">Ingresar</button>
+          <p id="superadminLoginStatus" class="community-note"></p>
+        </div>
+        <div id="superadminPanel" hidden>
+          <div class="sa-tabs" role="tablist">
+            <button id="superadminTabConfig" class="sa-tab active" type="button" data-sa-tab="config">Configuracion</button>
+            <button id="superadminTabAccount" class="sa-tab" type="button" data-sa-tab="account">Cuenta</button>
+          </div>
+          <div id="superadminConfigSection">
+            <p class="community-note">Credenciales de integraciones (Google, MercadoPago). Se guardan en la base de datos del servidor; los valores secretos se muestran enmascarados.</p>
+            <div id="superadminSettingsList" class="community-list"></div>
+          </div>
+          <div id="superadminAccountSection" hidden>
+            <div class="community-section">
+              <p class="eyebrow">Cambiar contrasena</p>
+              <label for="superadminCurrentPassword">Contrasena actual</label>
+              <input id="superadminCurrentPassword" type="password" autocomplete="current-password" />
+              <label for="superadminNewPassword">Contrasena nueva (minimo 8)</label>
+              <input id="superadminNewPassword" type="password" autocomplete="new-password" />
+              <button id="superadminChangePasswordBtn">Cambiar contrasena</button>
+            </div>
+            <div class="community-section">
+              <p class="eyebrow">Sesion</p>
+              <p id="superadminSessionInfo" class="community-note"></p>
+              <button id="superadminLogoutBtn" class="ghost">Cerrar sesion</button>
+            </div>
+          </div>
+          <p id="superadminStatus" class="community-note"></p>
+        </div>
+      </div>
+    </div>
+
     <script
       defer
       src="https://umami-production-b559.up.railway.app/script.js"
@@ -545,7 +591,7 @@
     ></script>
     <script src="core.js?v=2"></script>
     <script src="net.js?v=2"></script>
-    <script src="app.js?v=89"></script>
+    <script src="app.js?v=90"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;
