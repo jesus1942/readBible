@@ -2318,6 +2318,96 @@ button:active {
   color: #7a5a2d;
 }
 
+.home-greeting {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+}
+
+.home-greeting[hidden] {
+  display: none !important;
+}
+
+.home-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid #d8c39a;
+  object-fit: cover;
+}
+
+.home-avatar-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f2e0bf;
+  color: #5b4630;
+  font-weight: 700;
+  font-size: 22px;
+}
+
+.home-hello {
+  font-size: 26px;
+  font-weight: 700;
+  color: #2d2116;
+}
+
+.home-cards {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.home-cards[hidden] {
+  display: none !important;
+}
+
+.daily-home-text {
+  margin: 0;
+  font-size: 18px;
+  font-style: italic;
+  line-height: 1.55;
+  color: #2d2116;
+}
+
+.daily-home-context {
+  display: block;
+  margin-top: 10px;
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
+.daily-home-ref {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #7a5a2d;
+  font-weight: 600;
+}
+
+.home-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.home-action-btn {
+  padding: 16px 12px;
+  border-radius: 999px;
+  border: 1px solid #d8c39a;
+  background: #fff5e4;
+  color: #2d2116;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.continue-ref {
+  margin: 0;
+  font-size: 15px;
+  color: #2d2116;
+}
+
 .account-row {
   display: flex;
   align-items: center;

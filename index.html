@@ -25,11 +25,35 @@
       <header class="hero">
         <div>
           <p class="eyebrow">Lectura Viva</p>
-          <h1>Versiculos vivos, lectura plena.</h1>
-          <p class="subtitle">Busqueda rapida, lectura plena y referencias destacadas.</p>
+          <div id="homeGreeting" class="home-greeting" hidden></div>
+          <h1 id="homeTitle">Versiculos vivos, lectura plena.</h1>
+          <p id="homeSubtitle" class="subtitle">Busqueda rapida, lectura plena y referencias destacadas.</p>
         </div>
         <button id="menuBtn" class="menu-btn" aria-label="Abrir menu">&#9776;</button>
       </header>
+
+      <section id="homeCards" class="home-cards" hidden>
+        <div id="dailyCard" class="card daily-home-card" hidden>
+          <p class="eyebrow">Versiculo del dia</p>
+          <p id="dailyCardText" class="daily-home-text"></p>
+          <p id="dailyCardRef" class="daily-home-ref"></p>
+          <button id="dailyCardOpen" class="ghost" type="button">Leer en su contexto</button>
+        </div>
+        <div class="home-actions">
+          <button id="homeDevotionalBtn" class="home-action-btn" type="button">Mi devocional</button>
+          <button id="homeCommunityBtn" class="home-action-btn" type="button">Comunidad</button>
+        </div>
+        <div id="continueCard" class="card continue-card" hidden>
+          <p class="eyebrow">Continuar leyendo</p>
+          <p id="continueRef" class="continue-ref"></p>
+          <button id="continueBtn" class="ghost" type="button">Retomar lectura</button>
+        </div>
+        <div id="communityInviteCard" class="card continue-card" hidden>
+          <p class="eyebrow">Tu iglesia</p>
+          <p class="continue-ref">Si queres, contanos de tu iglesia para conectarte con tu comunidad. Es opcional.</p>
+          <button id="communityInviteBtn" class="ghost" type="button">Completar ahora</button>
+        </div>
+      </section>
 
       <section class="card search">
         <div class="field">
@@ -66,8 +90,9 @@
       <footer class="footer">
         <canvas class="footer-flame-canvas" aria-hidden="true"></canvas>
         <nav class="footer-nav" aria-label="Navegacion rapida">
+          <button id="floatHomeBtn" class="footer-nav-btn" type="button">Inicio</button>
           <button id="floatSearchBtn" class="footer-nav-btn" type="button">Buscar</button>
-          <button id="floatCommunityBtn" class="footer-nav-btn" type="button">Comunidad</button>
+          <button id="floatDevotionalBtn" class="footer-nav-btn" type="button">Devocional</button>
           <button id="floatMenuBtn" class="footer-nav-btn" type="button">Menu</button>
         </nav>
         <div class="footer-bottom">
@@ -106,16 +131,6 @@
 
     <div id="splash" class="splash" hidden>
       <canvas id="splashCanvas" class="splash-canvas" aria-hidden="true"></canvas>
-    </div>
-
-    <div id="dailyVerse" class="daily" hidden>
-      <div class="daily-card">
-        <p id="dailyGreeting" class="daily-greeting"></p>
-        <p class="daily-title">Versiculo del dia</p>
-        <p id="dailyText" class="daily-text"></p>
-        <p id="dailyRef" class="daily-ref"></p>
-        <button id="dailyClose" class="btn-close daily-close" aria-label="Cerrar">✕</button>
-      </div>
     </div>
 
     <div id="welcomeGate" class="welcome-gate" hidden>

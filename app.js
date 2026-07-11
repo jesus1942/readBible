@@ -186,7 +186,6 @@ const communityCellTime = document.getElementById("communityCellTime");
 const communityCellLocation = document.getElementById("communityCellLocation");
 const communityCreateCellBtn = document.getElementById("communityCreateCellBtn");
 const floatSearchBtn = document.getElementById("floatSearchBtn");
-const floatCommunityBtn = document.getElementById("floatCommunityBtn");
 const floatMenuBtn = document.getElementById("floatMenuBtn");
 const developerOverlay = document.getElementById("developerOverlay");
 const developerClose = document.getElementById("developerClose");
@@ -231,11 +230,18 @@ const zenText = document.getElementById("zenText");
 const zenRef = document.getElementById("zenRef");
 const zenClose = document.getElementById("zenClose");
 const splash = document.getElementById("splash");
-const dailyVerse = document.getElementById("dailyVerse");
-const dailyGreeting = document.getElementById("dailyGreeting");
-const dailyText = document.getElementById("dailyText");
-const dailyRef = document.getElementById("dailyRef");
-const dailyClose = document.getElementById("dailyClose");
+const homeCards = document.getElementById("homeCards");
+const homeGreeting = document.getElementById("homeGreeting");
+const homeTitle = document.getElementById("homeTitle");
+const homeSubtitle = document.getElementById("homeSubtitle");
+const dailyCard = document.getElementById("dailyCard");
+const dailyCardText = document.getElementById("dailyCardText");
+const dailyCardRef = document.getElementById("dailyCardRef");
+const dailyCardOpen = document.getElementById("dailyCardOpen");
+const continueCard = document.getElementById("continueCard");
+const continueRef = document.getElementById("continueRef");
+const continueBtn = document.getElementById("continueBtn");
+const communityInviteCard = document.getElementById("communityInviteCard");
 const welcomeGate = document.getElementById("welcomeGate");
 const googleSignInSlot = document.getElementById("googleSignInSlot");
 const googleSignInBtn = document.getElementById("googleSignInBtn");
@@ -1491,6 +1497,13 @@ function initScrollObserver() {
 }
 
 function initFooterNav() {
+  const floatHomeBtn = document.getElementById("floatHomeBtn");
+  const floatDevotionalBtn = document.getElementById("floatDevotionalBtn");
+  if (floatHomeBtn) {
+    floatHomeBtn.addEventListener("click", () => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
   if (floatSearchBtn) {
     floatSearchBtn.addEventListener("click", () => {
       const searchSection = document.querySelector(".search");
@@ -1503,8 +1516,8 @@ function initFooterNav() {
       }
     });
   }
-  if (floatCommunityBtn) {
-    floatCommunityBtn.addEventListener("click", () => openCommunity());
+  if (floatDevotionalBtn) {
+    floatDevotionalBtn.addEventListener("click", () => openDevotionalOverlay());
   }
   if (floatMenuBtn) {
     floatMenuBtn.addEventListener("click", () => openMenu());
@@ -4040,7 +4053,7 @@ if (themeCheckboxes.length) {
   addListener(themesSave, "click", () => {
     const selected = themeCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
     setSelectedThemes(selected);
-    showDailyVerse();
+    renderHomeCards();
     updatePushPreferences().catch(() => {
       // ignore
     });
@@ -4930,7 +4943,11 @@ function onLoggedIn() {
     });
   }
   startSpaceSync();
-  showDailyVerse();
+  renderHomeCards();
+  const homeDevotionalBtn = document.getElementById("homeDevotionalBtn");
+  const homeCommunityBtn = document.getElementById("homeCommunityBtn");
+  if (homeDevotionalBtn) homeDevotionalBtn.addEventListener("click", () => openDevotionalOverlay());
+  if (homeCommunityBtn) homeCommunityBtn.addEventListener("click", () => openCommunity());
   showHelpIfFirstTime();
 }
 
@@ -5041,10 +5058,7 @@ async function logoutSession() {
   location.reload();
 }
 
-async function showDailyVerse() {
-  let reference = "";
-  let verseText = "";
-  let contextText = "";
+async function loadDailyVerseData() {
   try {
     const verses = await fetchJson("daily_verses.json");
     if (!Array.isArray(verses) || !verses.length) {
@@ -5053,48 +5067,109 @@ async function showDailyVerse() {
     const dayIndex = dayOfYearIndex();
     const idx = dailyIndexForUser(dayIndex, verses.length);
     const verse = verses[idx];
-    reference = sanitizeReferenceString(verse.reference || "");
-    verseText = verse.text || "";
-    contextText = verse.context || "";
+    const reference = sanitizeReferenceString(verse.reference || "");
+    let verseText = verse.text || "";
+    const contextText = verse.context || "";
     if (!verseText && reference) {
       verseText = await fetchVerseByReference(reference, DAILY_VERSION);
     }
     if (verseText || reference) {
       writeDailyVerseCache({ text: verseText, reference, context: contextText, version: DAILY_VERSION });
     }
+    return { reference, verseText, contextText };
   } catch {
     const cached = readDailyVerseCache();
     if (cached) {
-      verseText = cached.text || "";
-      reference = cached.reference || "";
-      contextText = cached.context || "";
+      return {
+        reference: cached.reference || "",
+        verseText: cached.text || "",
+        contextText: cached.context || ""
+      };
     }
+    return { reference: "", verseText: "", contextText: "" };
   }
-  const name = getUserName();
-  if (name) {
-    dailyGreeting.textContent = `Hola ${name}`;
-    dailyGreeting.hidden = false;
-  } else {
-    dailyGreeting.hidden = true;
-  }
-  if (contextText) {
-    dailyText.innerHTML = `<span>${escapeHtml(verseText || "")}</span><span style="display:block;margin-top:10px;font-size:0.85em;opacity:0.8">${escapeHtml(contextText)}</span>`;
-  } else {
-    dailyText.textContent = verseText || "No se pudo cargar el versiculo.";
-  }
-  if (reference) {
-    dailyRef.textContent = `${reference} (${DAILY_VERSION})`;
-  } else {
-    dailyRef.textContent = "";
-  }
-  dailyVerse.hidden = false;
-  dailyClose.addEventListener("click", closeDailyVerse, { once: true });
-  dailyVerse.addEventListener("click", closeDailyVerse, { once: true });
-  dailyVerse.addEventListener("touchstart", closeDailyVerse, { once: true });
 }
 
-function closeDailyVerse() {
-  dailyVerse.hidden = true;
+function firstName(fullName) {
+  return String(fullName || "").trim().split(/\s+/)[0] || "";
+}
+
+function renderHomeGreeting() {
+  if (!homeGreeting) return;
+  const auth = window.ReadBibleAuth;
+  const user = auth ? auth.getSessionUser() : null;
+  const name = firstName(user && user.fullName ? user.fullName : getUserName());
+  if (!name) {
+    homeGreeting.hidden = true;
+    if (homeTitle) homeTitle.hidden = false;
+    return;
+  }
+  const avatar = user && user.avatarUrl
+    ? `<img class="home-avatar" src="${escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" />`
+    : `<span class="home-avatar home-avatar-letter">${escapeHtml(name.charAt(0).toUpperCase())}</span>`;
+  homeGreeting.innerHTML = `${avatar}<span class="home-hello">Hola, ${escapeHtml(name)}</span>`;
+  homeGreeting.hidden = false;
+  if (homeTitle) homeTitle.hidden = true;
+  if (homeSubtitle) homeSubtitle.hidden = true;
+}
+
+async function renderHomeCards() {
+  if (!homeCards) return;
+  homeCards.hidden = false;
+  renderHomeGreeting();
+  renderContinueCard();
+  renderCommunityInviteCard();
+  const { reference, verseText, contextText } = await loadDailyVerseData();
+  if (!dailyCard) return;
+  if (!verseText && !reference) {
+    dailyCard.hidden = true;
+    return;
+  }
+  if (contextText) {
+    dailyCardText.innerHTML = `<span>${escapeHtml(verseText || "")}</span><span class="daily-home-context">${escapeHtml(contextText)}</span>`;
+  } else {
+    dailyCardText.textContent = verseText || "";
+  }
+  dailyCardRef.textContent = reference ? `${reference} (${DAILY_VERSION})` : "";
+  dailyCard.hidden = false;
+  if (dailyCardOpen) {
+    dailyCardOpen.hidden = !reference;
+    dailyCardOpen.onclick = () => {
+      if (queryInput) queryInput.value = reference;
+      fetchVerse();
+      const searchSection = document.querySelector(".search");
+      if (searchSection) searchSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+  }
+}
+
+function renderContinueCard() {
+  if (!continueCard) return;
+  const last = readLastQueryRaw();
+  if (!last || !last.query) {
+    continueCard.hidden = true;
+    return;
+  }
+  continueRef.textContent = `${last.query}${last.version ? ` (${last.version})` : ""}`;
+  continueCard.hidden = false;
+  if (continueBtn) {
+    continueBtn.onclick = () => {
+      if (queryInput) queryInput.value = last.query;
+      if (last.version && versionSelect) versionSelect.value = last.version;
+      fetchVerse();
+      const searchSection = document.querySelector(".search");
+      if (searchSection) searchSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+  }
+}
+
+function renderCommunityInviteCard() {
+  if (!communityInviteCard) return;
+  const info = readCommunityInfo();
+  const hasProfile = Boolean(info.church || info.city);
+  communityInviteCard.hidden = hasProfile;
+  const inviteBtn = document.getElementById("communityInviteBtn");
+  if (inviteBtn) inviteBtn.onclick = () => openCommunity();
 }
 
 function renderAccountInfo() {
@@ -5268,13 +5343,13 @@ const TOUR_STEPS = [
   {
     sel: ".footer-nav",
     title: "Barra de navegacion",
-    text: "Desde aqui accedes rapidamente a la busqueda, la comunidad y el menu lateral.",
+    text: "Desde aqui accedes rapidamente al inicio, la busqueda, tu devocional y el menu lateral.",
     pad: 6
   },
   {
-    sel: "#floatCommunityBtn",
-    title: "Comunidad",
-    text: "Conectate con tu iglesia: perfil, mapa de miembros, sedes y eventos.",
+    sel: "#floatDevotionalBtn",
+    title: "Tu devocional",
+    text: "Tu espacio personal para el devocional de cada dia: lectura, observacion, aplicacion y oracion.",
     pad: 10
   },
   {
