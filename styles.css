@@ -2248,39 +2248,112 @@ button:active {
   font-size: 20px;
 }
 
-.name-prompt {
+.welcome-gate {
   position: fixed;
   inset: 0;
-  background: rgba(15, 10, 7, 0.85);
+  background: #f4f0e6;
   display: grid;
   place-items: center;
   padding: 24px;
-  z-index: 1100;
+  z-index: 1500;
 }
 
-.name-prompt[hidden] {
+.welcome-gate[hidden] {
   display: none !important;
 }
 
-.name-card {
+.welcome-card {
   background: #fff5e4;
+  border: 1px solid #e7d4b6;
   border-radius: 18px;
-  padding: 24px;
+  padding: 32px 24px;
   text-align: center;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
   max-width: 360px;
   width: 100%;
+  display: grid;
+  gap: 12px;
+  justify-items: center;
 }
 
-.name-title {
-  margin: 8px 0 16px;
-  font-size: 20px;
+.welcome-logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+}
+
+.welcome-verse {
+  margin: 0;
+  font-size: 18px;
+  font-style: italic;
+  color: #2d2116;
+  line-height: 1.5;
+}
+
+.welcome-verse-ref {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #7a5a2d;
+}
+
+#googleSignInSlot {
+  min-height: 4px;
+}
+
+#googleSignInBtn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 999px;
+  border: 1px solid #d8c39a;
+  background: #ffffff;
+  color: #2d2116;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.welcome-status {
+  margin: 0;
+  font-size: 13px;
+  color: #7a5a2d;
+}
+
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.account-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid #d8c39a;
+  object-fit: cover;
+}
+
+.account-avatar-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f2e0bf;
+  color: #5b4630;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.account-name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
   color: #2d2116;
 }
 
-.name-card input {
-  width: 100%;
-  margin-bottom: 12px;
+.account-email {
+  margin: 0;
+  font-size: 12px;
+  color: #7a5a2d;
+  word-break: break-all;
 }
 
 @media (max-width: 640px) {

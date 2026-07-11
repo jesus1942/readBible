@@ -118,12 +118,17 @@
       </div>
     </div>
 
-    <div id="namePrompt" class="name-prompt" hidden>
-      <div class="name-card">
-        <p class="eyebrow">Bienvenido</p>
-        <p class="name-title">Como te llamas?</p>
-        <input id="nameInput" type="text" maxlength="40" placeholder="Tu nombre" />
-        <button id="saveNameBtn">Guardar</button>
+    <div id="welcomeGate" class="welcome-gate" hidden>
+      <div class="welcome-card">
+        <img class="welcome-logo" src="icons/icon-192.png" alt="" />
+        <p class="eyebrow">Lectura Viva</p>
+        <p class="welcome-verse">"Lampara es a mis pies tu palabra, y lumbrera a mi camino."</p>
+        <p class="welcome-verse-ref">Salmos 119:105</p>
+        <div id="googleSignInSlot"></div>
+        <button id="googleSignInBtn" type="button" hidden>Continuar con Google</button>
+        <button id="devSignInBtn" type="button" class="ghost" hidden>Entrar como usuario de prueba</button>
+        <button id="legacyContinueBtn" type="button" class="ghost" hidden>Continuar sin cuenta por ahora</button>
+        <p id="welcomeStatus" class="welcome-status" hidden></p>
       </div>
     </div>
 
@@ -216,6 +221,11 @@
           <button id="pushToggle" class="ghost">Activar notificaciones diarias</button>
           <button id="pushResubscribe" class="ghost">Recrear suscripcion</button>
           <p id="pushDebug" class="about-text push-debug"></p>
+        </div>
+        <div class="side-menu-about">
+          <p class="eyebrow">Cuenta</p>
+          <div id="accountInfo" class="account-info"></div>
+          <button id="logoutBtn" class="ghost">Cerrar sesion</button>
         </div>
         <div class="side-menu-about">
           <p class="eyebrow">Acerca de</p>
@@ -590,7 +600,8 @@
     ></script>
     <script src="core.js?v=2"></script>
     <script src="net.js?v=2"></script>
-    <script src="app.js?v=90"></script>
+    <script src="auth.js?v=1"></script>
+    <script src="app.js?v=91"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;

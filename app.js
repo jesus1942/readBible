@@ -236,9 +236,12 @@ const dailyGreeting = document.getElementById("dailyGreeting");
 const dailyText = document.getElementById("dailyText");
 const dailyRef = document.getElementById("dailyRef");
 const dailyClose = document.getElementById("dailyClose");
-const namePrompt = document.getElementById("namePrompt");
-const nameInput = document.getElementById("nameInput");
-const saveNameBtn = document.getElementById("saveNameBtn");
+const welcomeGate = document.getElementById("welcomeGate");
+const googleSignInSlot = document.getElementById("googleSignInSlot");
+const googleSignInBtn = document.getElementById("googleSignInBtn");
+const devSignInBtn = document.getElementById("devSignInBtn");
+const legacyContinueBtn = document.getElementById("legacyContinueBtn");
+const welcomeStatus = document.getElementById("welcomeStatus");
 const splashCanvas = document.getElementById("splashCanvas");
 let touchStartX = 0;
 let touchStartY = 0;
@@ -1948,6 +1951,7 @@ function setSelectedThemes(themes) {
   } catch {
     // ignore
   }
+  queuePrefsSync();
 }
 
 
@@ -2011,6 +2015,9 @@ function writeHighlights(key, highlights) {
     localStorage.setItem(key, JSON.stringify(highlights));
   } catch {
     // ignore
+  }
+  if (key.startsWith("highlight:")) {
+    queueSync("highlight", key.slice(10), highlights, !highlights.length);
   }
 }
 
@@ -2550,6 +2557,7 @@ function persistLastQuery() {
     // ignore storage errors
   }
   saveRecentQuery(payload.query);
+  queuePrefsSync();
 }
 
 function buildBookmarkId(query, version, mode) {
@@ -2579,11 +2587,25 @@ function readBookmarks() {
   }
 }
 
-function writeBookmarks(items) {
+function writeBookmarksRaw(items) {
   try {
     localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(items));
   } catch {
     // ignore
+  }
+}
+
+function writeBookmarks(items) {
+  const previous = readBookmarks();
+  writeBookmarksRaw(items);
+  const nextIds = new Set(items.map((item) => item.id));
+  for (const item of items) {
+    queueSync("bookmark", item.id, item, false);
+  }
+  for (const old of previous) {
+    if (!nextIds.has(old.id)) {
+      queueSync("bookmark", old.id, null, true);
+    }
   }
 }
 
@@ -2772,7 +2794,11 @@ function readStudy(key) {
 function writeStudy(key, data) {
   try {
     const normalized = normalizeStudyData(data);
-    localStorage.setItem(key, JSON.stringify({ ...normalized, updatedAt: Date.now() }));
+    const stored = { ...normalized, updatedAt: Date.now() };
+    localStorage.setItem(key, JSON.stringify(stored));
+    if (key.startsWith("study:")) {
+      queueSync("study", key.slice(6), stored, false);
+    }
   } catch {
     // ignore
   }
@@ -2783,6 +2809,9 @@ function deleteStudy(key) {
     localStorage.removeItem(key);
   } catch {
     // ignore
+  }
+  if (key && key.startsWith("study:")) {
+    queueSync("study", key.slice(6), null, true);
   }
 }
 
@@ -4071,6 +4100,10 @@ addListener(superadminOpen, "click", () => {
   openSuperadminPanel();
 });
 
+addListener(document.getElementById("logoutBtn"), "click", () => {
+  logoutSession();
+});
+
 addListener(superadminClose, "click", closeSuperadminPanel);
 
 addListener(superadminOverlay, "click", (event) => {
@@ -4122,28 +4155,12 @@ if (developerPanel) {
 }
 
 initVersions();
-refreshPushStatus().catch(() => {
-  // ignore
-});
-restoreLastQuery();
 initSplash();
 initScrollObserver();
-initFooterNav();
 initFooterFlame();
 initHelpTabs();
 initTour();
 initUpdateBanner();
-const communityInfo = readCommunityInfo();
-updateCommunityUi(communityInfo);
-getCommunityKey();
-if (typeof location !== "undefined") {
-  const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
-  if (isLocalhost) {
-    loadCommunityData(false).catch(() => {
-      // ignore initial local bootstrap errors
-    });
-  }
-}
 
 function initSplash() {
   splash.hidden = false;
@@ -4659,36 +4676,369 @@ function startSplashAnimation() {
   requestAnimationFrame(step);
 }
 
-function initNamePrompt() {
-  const name = getUserName();
-  if (name) return;
-  namePrompt.hidden = false;
-  saveNameBtn.addEventListener("click", () => {
-    const value = nameInput.value.trim();
-    if (!value) return;
-    setUserName(value);
-    namePrompt.hidden = true;
-  }, { once: true });
-}
+// --- Sincronizacion del espacio personal (local-first) ---
+// localStorage sigue siendo la fuente inmediata; el servidor es el respaldo
+// multi-dispositivo. Cola deduplicada por type|key con last-write-wins.
+const SYNC_QUEUE_KEY = "syncQueue";
+let syncFlushTimer = 0;
 
-function getUserName() {
-  return localStorage.getItem("userName");
-}
-
-function setUserName(name) {
+function readSyncQueue() {
   try {
-    localStorage.setItem("userName", name);
+    const raw = localStorage.getItem(SYNC_QUEUE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSyncQueue(queue) {
+  try {
+    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
   } catch {
     // ignore
   }
 }
 
+function queueSync(type, key, data, deleted) {
+  const auth = window.ReadBibleAuth;
+  if (!auth || !auth.hasSession() || !key) return;
+  const queue = readSyncQueue();
+  queue[`${type}|${key}`] = {
+    type,
+    key,
+    data: deleted ? null : data,
+    deleted: Boolean(deleted),
+    updatedAtMs: Date.now()
+  };
+  writeSyncQueue(queue);
+  clearTimeout(syncFlushTimer);
+  syncFlushTimer = setTimeout(() => {
+    flushSyncQueue();
+  }, 3000);
+}
+
+async function flushSyncQueue() {
+  const auth = window.ReadBibleAuth;
+  if (!auth || !auth.hasSession()) return;
+  const queue = readSyncQueue();
+  const entries = Object.entries(queue).slice(0, 500);
+  if (!entries.length) return;
+  const items = entries.map(([, value]) => ({
+    type: value.type,
+    key: value.key,
+    data: value.data,
+    updatedAtMs: value.updatedAtMs,
+    deleted: value.deleted
+  }));
+  try {
+    await auth.authFetch("/me/space/sync", {
+      method: "POST",
+      body: JSON.stringify({ items })
+    });
+    const current = readSyncQueue();
+    for (const [queueKey, sent] of entries) {
+      if (current[queueKey] && current[queueKey].updatedAtMs === sent.updatedAtMs) {
+        delete current[queueKey];
+      }
+    }
+    writeSyncQueue(current);
+  } catch {
+    // sin red o backend caido: la cola queda y se reintenta
+  }
+}
+
+async function pullSpace() {
+  const auth = window.ReadBibleAuth;
+  if (!auth || !auth.hasSession()) return;
+  const data = await auth.authFetch("/me/space");
+  const queue = readSyncQueue();
+  const localIsNewer = (type, key, serverMs) => {
+    const pending = queue[`${type}|${key}`];
+    return pending && pending.updatedAtMs > serverMs;
+  };
+  for (const item of data.highlights || []) {
+    if (localIsNewer("highlight", item.key, item.updatedAtMs)) continue;
+    try {
+      localStorage.setItem(`highlight:${item.key}`, JSON.stringify(item.data));
+    } catch {
+      // ignore
+    }
+  }
+  for (const item of data.studies || []) {
+    if (localIsNewer("study", item.key, item.updatedAtMs)) continue;
+    try {
+      localStorage.setItem(`study:${item.key}`, JSON.stringify(item.data));
+    } catch {
+      // ignore
+    }
+  }
+  if ((data.bookmarks || []).length) {
+    const local = readBookmarks();
+    const byId = new Map(local.map((bookmark) => [bookmark.id, bookmark]));
+    for (const item of data.bookmarks || []) {
+      if (localIsNewer("bookmark", item.key, item.updatedAtMs)) continue;
+      byId.set(item.key, { id: item.key, ...(item.data || {}) });
+    }
+    writeBookmarksRaw([...byId.values()].slice(0, 60));
+  }
+  if (data.prefs && !localIsNewer("prefs", "prefs", data.prefs.updatedAtMs)) {
+    try {
+      if (data.prefs.lastQuery && !localStorage.getItem("lastQuery")) {
+        localStorage.setItem("lastQuery", JSON.stringify(data.prefs.lastQuery));
+      }
+      if (Array.isArray(data.prefs.dailyThemes) && data.prefs.dailyThemes.length) {
+        localStorage.setItem("dailyThemes", JSON.stringify(data.prefs.dailyThemes));
+      }
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function readLastQueryRaw() {
+  try {
+    const raw = localStorage.getItem("lastQuery");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function queuePrefsSync() {
+  queueSync("prefs", "prefs", {
+    lastQuery: readLastQueryRaw(),
+    dailyThemes: getSelectedThemes()
+  });
+}
+
+// Primer login en un dispositivo con datos previos: sube todo con
+// updatedAtMs=0 (o el updatedAt real si existe) para nunca pisar datos
+// mas nuevos ya sincronizados desde otro dispositivo.
+async function migrateLegacySpace() {
+  const auth = window.ReadBibleAuth;
+  if (!auth || !auth.hasSession()) return;
+  if (localStorage.getItem("migrationDone") === "1") return;
+  const items = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const storageKey = localStorage.key(i);
+    if (!storageKey) continue;
+    if (storageKey.startsWith("highlight:")) {
+      const data = readHighlights(storageKey);
+      if (data.length) {
+        items.push({ type: "highlight", key: storageKey.slice(10), data, updatedAtMs: 0 });
+      }
+    } else if (storageKey.startsWith("study:")) {
+      try {
+        const data = JSON.parse(localStorage.getItem(storageKey));
+        if (hasStudyData(data)) {
+          items.push({
+            type: "study",
+            key: storageKey.slice(6),
+            data,
+            updatedAtMs: Number(data.updatedAt) || 0
+          });
+        }
+      } catch {
+        // entrada corrupta: se ignora
+      }
+    }
+  }
+  for (const bookmark of readBookmarks()) {
+    items.push({ type: "bookmark", key: bookmark.id, data: bookmark, updatedAtMs: Number(bookmark.updatedAt) || 0 });
+  }
+  const lastQuery = readLastQueryRaw();
+  const themes = getSelectedThemes();
+  if (lastQuery || themes.length) {
+    items.push({ type: "prefs", key: "prefs", data: { lastQuery, dailyThemes: themes }, updatedAtMs: 0 });
+  }
+  if (!items.length) {
+    try {
+      localStorage.setItem("migrationDone", "1");
+    } catch {
+      // ignore
+    }
+    return;
+  }
+  for (let i = 0; i < items.length; i += 400) {
+    await auth.authFetch("/me/space/sync", {
+      method: "POST",
+      body: JSON.stringify({ items: items.slice(i, i + 400) })
+    });
+  }
+  try {
+    localStorage.setItem("migrationDone", "1");
+  } catch {
+    // ignore
+  }
+}
+
+let spaceSyncStarted = false;
+
+function startSpaceSync() {
+  const auth = window.ReadBibleAuth;
+  if (!auth || !auth.hasSession() || spaceSyncStarted) return;
+  spaceSyncStarted = true;
+  migrateLegacySpace()
+    .catch(() => {
+      // sin red: se reintenta en el proximo inicio
+    })
+    .then(() => pullSpace())
+    .catch(() => {
+      // ignore
+    })
+    .finally(() => {
+      flushSyncQueue();
+    });
+  window.addEventListener("online", () => {
+    flushSyncQueue();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushSyncQueue();
+  });
+}
+
+function getUserName() {
+  const auth = window.ReadBibleAuth;
+  const user = auth ? auth.getSessionUser() : null;
+  if (user && user.fullName) return user.fullName;
+  return localStorage.getItem("userName");
+}
+
 function closeSplash(timer) {
   if (timer) clearTimeout(timer);
   splash.hidden = true;
-  initNamePrompt();
+  resolveAuthGate();
+}
+
+let loggedInInitDone = false;
+
+function onLoggedIn() {
+  if (welcomeGate) welcomeGate.hidden = true;
+  if (loggedInInitDone) return;
+  loggedInInitDone = true;
+  restoreLastQuery();
+  initFooterNav();
+  refreshPushStatus().catch(() => {
+    // ignore
+  });
+  updateCommunityUi(readCommunityInfo());
+  getCommunityKey();
+  if (typeof location !== "undefined" && (location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+    loadCommunityData(false).catch(() => {
+      // ignore initial local bootstrap errors
+    });
+  }
+  startSpaceSync();
   showDailyVerse();
   showHelpIfFirstTime();
+}
+
+async function resolveAuthGate() {
+  const auth = window.ReadBibleAuth;
+  if (!auth) {
+    onLoggedIn();
+    return;
+  }
+  const redirectCredential = auth.consumeRedirectCredential();
+  if (redirectCredential) {
+    try {
+      await auth.loginWithCredential(redirectCredential);
+    } catch {
+      // credencial de redirect invalida: cae al gate
+    }
+  }
+  if (auth.hasSession()) {
+    onLoggedIn();
+    auth.validateSession().then((state) => {
+      if (state === "invalid") showWelcomeGate();
+    }).catch(() => {
+      // sin red: se sigue con la sesion local
+    });
+    return;
+  }
+  showWelcomeGate();
+}
+
+function setWelcomeStatus(message) {
+  if (!welcomeStatus) return;
+  welcomeStatus.textContent = message || "";
+  welcomeStatus.hidden = !message;
+}
+
+function showGoogleFallbackButton(clientId) {
+  if (!googleSignInBtn) return;
+  googleSignInBtn.hidden = false;
+  googleSignInBtn.onclick = () => window.ReadBibleAuth.startRedirectLogin(clientId);
+}
+
+async function handleGoogleCredential(credential) {
+  setWelcomeStatus("Ingresando...");
+  try {
+    await window.ReadBibleAuth.loginWithCredential(credential);
+    setWelcomeStatus("");
+    onLoggedIn();
+  } catch (error) {
+    setWelcomeStatus(error.message || "No pude iniciar sesion. Proba de nuevo.");
+  }
+}
+
+async function showWelcomeGate() {
+  if (!welcomeGate) {
+    onLoggedIn();
+    return;
+  }
+  const auth = window.ReadBibleAuth;
+  welcomeGate.hidden = false;
+  setWelcomeStatus("");
+  if (devSignInBtn && auth.isLocalhost()) {
+    devSignInBtn.hidden = false;
+    devSignInBtn.onclick = () => handleGoogleCredential(auth.buildDevCredential());
+  }
+  let clientId = "";
+  try {
+    const config = await auth.authFetch("/auth/config");
+    clientId = config.googleClientId || "";
+  } catch {
+    // sin red o backend sin desplegar: rige el interruptor de abajo
+  }
+  if (!clientId) {
+    // Interruptor anti-lockout: sin client ID configurado la app sigue
+    // funcionando en modo legado para no dejar a nadie afuera.
+    setWelcomeStatus("El ingreso con Google se habilita pronto.");
+    if (legacyContinueBtn) {
+      legacyContinueBtn.hidden = false;
+      legacyContinueBtn.onclick = () => onLoggedIn();
+    }
+    return;
+  }
+  if (auth.isStandaloneIos()) {
+    showGoogleFallbackButton(clientId);
+    return;
+  }
+  try {
+    await auth.loadGisScript();
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: (response) => handleGoogleCredential(response.credential),
+      use_fedcm_for_prompt: true
+    });
+    window.google.accounts.id.renderButton(googleSignInSlot, {
+      theme: "outline",
+      text: "continue_with",
+      shape: "pill",
+      locale: "es",
+      width: 280
+    });
+  } catch {
+    showGoogleFallbackButton(clientId);
+  }
+}
+
+async function logoutSession() {
+  const auth = window.ReadBibleAuth;
+  if (auth) await auth.logout();
+  location.reload();
 }
 
 async function showDailyVerse() {
@@ -4747,10 +5097,37 @@ function closeDailyVerse() {
   dailyVerse.hidden = true;
 }
 
+function renderAccountInfo() {
+  const container = document.getElementById("accountInfo");
+  const logoutBtn = document.getElementById("logoutBtn");
+  if (!container) return;
+  const auth = window.ReadBibleAuth;
+  const user = auth ? auth.getSessionUser() : null;
+  if (!user) {
+    container.innerHTML = `<p class="about-text">Sin sesion iniciada.</p>`;
+    if (logoutBtn) logoutBtn.hidden = true;
+    return;
+  }
+  if (logoutBtn) logoutBtn.hidden = false;
+  const avatar = user.avatarUrl
+    ? `<img class="account-avatar" src="${escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" />`
+    : `<span class="account-avatar account-avatar-letter">${escapeHtml((user.fullName || "?").charAt(0).toUpperCase())}</span>`;
+  container.innerHTML = `
+    <div class="account-row">
+      ${avatar}
+      <div>
+        <p class="account-name">${escapeHtml(user.fullName || "")}</p>
+        <p class="account-email">${escapeHtml(user.email || "")}</p>
+      </div>
+    </div>
+  `;
+}
+
 function openMenu() {
   if (!sideMenu) return;
   renderBookmarksIndex();
   renderNotesIndex();
+  renderAccountInfo();
   refreshPushStatus().catch(() => {
     // ignore
   });
