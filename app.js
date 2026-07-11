@@ -5094,6 +5094,285 @@ function firstName(fullName) {
   return String(fullName || "").trim().split(/\s+/)[0] || "";
 }
 
+// --- Devocionales ---
+const devotionalState = {
+  month: "",
+  selectedDate: "",
+  entries: new Map(),
+  streak: null
+};
+
+function localIsoDate(date) {
+  const d = date || new Date();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
+function devotionalDraftKey(date) {
+  return `devotionalDraft:${date}`;
+}
+
+function readDevotionalDraft(date) {
+  try {
+    const raw = localStorage.getItem(devotionalDraftKey(date));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeDevotionalDraft(date, data) {
+  try {
+    if (data) localStorage.setItem(devotionalDraftKey(date), JSON.stringify(data));
+    else localStorage.removeItem(devotionalDraftKey(date));
+  } catch {
+    // ignore
+  }
+}
+
+function devotionalFormData() {
+  return {
+    passageReference: (document.getElementById("devotionalPassage") || {}).value || "",
+    observation: (document.getElementById("devotionalObservation") || {}).value || "",
+    application: (document.getElementById("devotionalApplication") || {}).value || "",
+    prayer: (document.getElementById("devotionalPrayer") || {}).value || ""
+  };
+}
+
+function fillDevotionalForm(data) {
+  const fields = {
+    devotionalPassage: data && data.passageReference,
+    devotionalObservation: data && data.observation,
+    devotionalApplication: data && data.application,
+    devotionalPrayer: data && data.prayer
+  };
+  for (const [id, value] of Object.entries(fields)) {
+    const el = document.getElementById(id);
+    if (el) el.value = value || "";
+  }
+}
+
+function hasDevotionalContent(data) {
+  return Boolean(
+    (data.observation && data.observation.trim()) ||
+    (data.application && data.application.trim()) ||
+    (data.prayer && data.prayer.trim())
+  );
+}
+
+function setDevotionalStatus(message, isError) {
+  const el = document.getElementById("devotionalStatus");
+  if (!el) return;
+  el.textContent = message || "";
+  el.style.color = isError ? "#a33" : "";
+}
+
+function renderDevotionalStreak() {
+  const el = document.getElementById("devotionalStreak");
+  if (!el) return;
+  const streak = devotionalState.streak;
+  if (!streak || !streak.totalDays) {
+    el.textContent = "Hoy es un buen dia para tu primer devocional.";
+    return;
+  }
+  if (streak.current > 1) {
+    el.textContent = `Llevas ${streak.current} dias seguidos. ${streak.totalDays} devocionales en total.`;
+  } else if (streak.current === 1) {
+    el.textContent = `Hoy sumaste un dia mas. ${streak.totalDays} devocionales en total.`;
+  } else {
+    el.textContent = `Tenes ${streak.totalDays} devocionales guardados. Retoma hoy cuando quieras.`;
+  }
+}
+
+const MONTH_NAMES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+function renderDevotionalCalendar() {
+  const container = document.getElementById("devotionalCalendar");
+  const label = document.getElementById("devotionalMonthLabel");
+  if (!container || !devotionalState.month) return;
+  const [year, month] = devotionalState.month.split("-").map(Number);
+  if (label) label.textContent = `${MONTH_NAMES[month - 1]} ${year}`;
+  const firstDay = new Date(year, month - 1, 1);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const todayIso = localIsoDate();
+  let html = ["D", "L", "M", "M", "J", "V", "S"].map((d) => `<span class="devcal-head">${d}</span>`).join("");
+  for (let i = 0; i < firstDay.getDay(); i += 1) html += "<span></span>";
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const classes = ["devcal-day"];
+    if (devotionalState.entries.has(iso)) classes.push("has-entry");
+    if (iso === devotionalState.selectedDate) classes.push("selected");
+    if (iso === todayIso) classes.push("today");
+    const disabled = iso > todayIso ? "disabled" : "";
+    html += `<button type="button" class="${classes.join(" ")}" data-dev-date="${iso}" ${disabled}>${day}</button>`;
+  }
+  container.innerHTML = html;
+}
+
+async function loadDevotionalMonth(month) {
+  const auth = window.ReadBibleAuth;
+  devotionalState.month = month;
+  if (!auth || !auth.hasSession()) {
+    devotionalState.entries = new Map();
+    renderDevotionalCalendar();
+    return;
+  }
+  try {
+    const data = await auth.authFetch(`/me/devotionals?month=${month}&today=${localIsoDate()}`);
+    devotionalState.entries = new Map((data.devotionals || []).map((item) => [item.date, item]));
+    devotionalState.streak = data.streak || null;
+  } catch {
+    devotionalState.entries = new Map();
+  }
+  renderDevotionalCalendar();
+  renderDevotionalStreak();
+}
+
+async function selectDevotionalDate(date) {
+  devotionalState.selectedDate = date;
+  const label = document.getElementById("devotionalDateLabel");
+  if (label) {
+    const [y, m, d] = date.split("-").map(Number);
+    label.textContent = date === localIsoDate() ? "Hoy" : `${d} de ${MONTH_NAMES[m - 1].toLowerCase()} de ${y}`;
+  }
+  renderDevotionalCalendar();
+  const draft = readDevotionalDraft(date);
+  if (draft) {
+    fillDevotionalForm(draft);
+    setDevotionalStatus(draft.pendingUpload ? "Borrador guardado en este dispositivo, se sube cuando haya conexion." : "Borrador sin guardar.");
+    return;
+  }
+  const entry = devotionalState.entries.get(date);
+  if (entry) {
+    fillDevotionalForm(entry);
+    setDevotionalStatus("");
+    return;
+  }
+  fillDevotionalForm(null);
+  setDevotionalStatus("");
+  if (date === localIsoDate()) {
+    const { reference } = await loadDailyVerseData();
+    const passage = document.getElementById("devotionalPassage");
+    if (passage && !passage.value && reference) passage.value = reference;
+  }
+}
+
+async function saveDevotional() {
+  const date = devotionalState.selectedDate;
+  if (!date) return;
+  const data = devotionalFormData();
+  if (!hasDevotionalContent(data)) {
+    setDevotionalStatus("Escribi al menos una observacion, aplicacion u oracion.", true);
+    return;
+  }
+  const auth = window.ReadBibleAuth;
+  if (!auth || !auth.hasSession()) {
+    writeDevotionalDraft(date, { ...data, pendingUpload: true });
+    setDevotionalStatus("Guardado en este dispositivo. Inicia sesion para sincronizarlo.");
+    return;
+  }
+  setDevotionalStatus("Guardando...");
+  try {
+    const result = await auth.authFetch(`/me/devotionals/${date}`, {
+      method: "POST",
+      body: JSON.stringify({ ...data, updatedAtMs: Date.now() })
+    });
+    if (result.devotional) devotionalState.entries.set(date, result.devotional);
+    writeDevotionalDraft(date, null);
+    setDevotionalStatus("Devocional guardado.");
+    loadDevotionalMonth(devotionalState.month);
+  } catch {
+    writeDevotionalDraft(date, { ...data, pendingUpload: true });
+    setDevotionalStatus("Sin conexion: quedo guardado aca y se sube solo cuando vuelva la red.");
+  }
+}
+
+async function flushDevotionalDrafts() {
+  const auth = window.ReadBibleAuth;
+  if (!auth || !auth.hasSession()) return;
+  const pending = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith("devotionalDraft:")) {
+      const draft = readDevotionalDraft(key.slice(16));
+      if (draft && draft.pendingUpload) pending.push([key.slice(16), draft]);
+    }
+  }
+  for (const [date, draft] of pending) {
+    try {
+      await auth.authFetch(`/me/devotionals/${date}`, {
+        method: "POST",
+        body: JSON.stringify({ ...draft, pendingUpload: undefined, updatedAtMs: Date.now() })
+      });
+      writeDevotionalDraft(date, null);
+    } catch {
+      // se reintenta en el proximo inicio
+    }
+  }
+}
+
+let devotionalWired = false;
+
+function wireDevotionalOverlay() {
+  if (devotionalWired) return;
+  devotionalWired = true;
+  const overlay = document.getElementById("devotionalOverlay");
+  addListener(document.getElementById("devotionalClose"), "click", () => {
+    if (overlay) overlay.hidden = true;
+  });
+  addListener(overlay, "click", (event) => {
+    if (event.target === overlay) overlay.hidden = true;
+  });
+  addListener(document.getElementById("devotionalSave"), "click", () => {
+    saveDevotional();
+  });
+  addListener(document.getElementById("devotionalUseDaily"), "click", async () => {
+    const { reference } = await loadDailyVerseData();
+    const passage = document.getElementById("devotionalPassage");
+    if (passage && reference) passage.value = reference;
+  });
+  const calendar = document.getElementById("devotionalCalendar");
+  addListener(calendar, "click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const btn = target.closest("[data-dev-date]");
+    if (btn && !btn.disabled) selectDevotionalDate(btn.getAttribute("data-dev-date"));
+  });
+  addListener(document.getElementById("devotionalPrevMonth"), "click", () => shiftDevotionalMonth(-1));
+  addListener(document.getElementById("devotionalNextMonth"), "click", () => shiftDevotionalMonth(1));
+  for (const id of ["devotionalPassage", "devotionalObservation", "devotionalApplication", "devotionalPrayer"]) {
+    addListener(document.getElementById(id), "input", () => {
+      const date = devotionalState.selectedDate;
+      if (!date) return;
+      const data = devotionalFormData();
+      const existing = readDevotionalDraft(date);
+      writeDevotionalDraft(date, { ...data, pendingUpload: Boolean(existing && existing.pendingUpload) });
+    });
+  }
+}
+
+function shiftDevotionalMonth(delta) {
+  const [year, month] = devotionalState.month.split("-").map(Number);
+  const next = new Date(year, month - 1 + delta, 1);
+  const nextMonth = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
+  loadDevotionalMonth(nextMonth);
+}
+
+async function openDevotionalOverlay() {
+  const overlay = document.getElementById("devotionalOverlay");
+  if (!overlay) return;
+  wireDevotionalOverlay();
+  overlay.hidden = false;
+  const today = localIsoDate();
+  await loadDevotionalMonth(today.slice(0, 7));
+  await selectDevotionalDate(today);
+  flushDevotionalDrafts().then(() => loadDevotionalMonth(devotionalState.month)).catch(() => {
+    // ignore
+  });
+  trackEvent("open_devotional");
+}
+
 function renderHomeGreeting() {
   if (!homeGreeting) return;
   const auth = window.ReadBibleAuth;

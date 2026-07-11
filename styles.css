@@ -2318,6 +2318,77 @@ button:active {
   color: #7a5a2d;
 }
 
+.devotional-overlay .sheet-card {
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+.devotional-streak {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: #5b4630;
+  font-style: italic;
+}
+
+.devotional-month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.devotional-month-label {
+  margin: 0;
+  font-weight: 700;
+  color: #2d2116;
+}
+
+.devotional-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.devcal-head {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #7a5a2d;
+  padding: 4px 0;
+}
+
+.devcal-day {
+  aspect-ratio: 1;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #2d2116;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.devcal-day:disabled {
+  color: #c9b989;
+  cursor: default;
+}
+
+.devcal-day.has-entry {
+  background: #f2e0bf;
+  font-weight: 700;
+}
+
+.devcal-day.today {
+  border-color: #f39c12;
+}
+
+.devcal-day.selected {
+  background: #f39c12;
+  color: #fff;
+  font-weight: 700;
+}
+
 .home-greeting {
   display: flex;
   align-items: center;

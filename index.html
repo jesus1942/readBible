@@ -562,6 +562,37 @@
       </div>
     </div>
 
+    <!-- Devocional overlay -->
+    <div id="devotionalOverlay" class="sheet-overlay center devotional-overlay" hidden>
+      <div class="sheet-card">
+        <div class="side-menu-header">
+          <p class="eyebrow">Mi devocional</p>
+          <button id="devotionalClose" class="btn-close" aria-label="Cerrar">&#10005;</button>
+        </div>
+        <p id="devotionalStreak" class="devotional-streak"></p>
+        <div class="devotional-month-nav">
+          <button id="devotionalPrevMonth" class="ghost" type="button" aria-label="Mes anterior">&#8249;</button>
+          <p id="devotionalMonthLabel" class="devotional-month-label"></p>
+          <button id="devotionalNextMonth" class="ghost" type="button" aria-label="Mes siguiente">&#8250;</button>
+        </div>
+        <div id="devotionalCalendar" class="devotional-calendar"></div>
+        <div class="community-section">
+          <p id="devotionalDateLabel" class="eyebrow"></p>
+          <label for="devotionalPassage">Lectura</label>
+          <input id="devotionalPassage" type="text" placeholder="Juan 15:1-8" />
+          <button id="devotionalUseDaily" class="ghost" type="button">Usar el versiculo del dia</button>
+          <label for="devotionalObservation">Que observo en el texto</label>
+          <textarea id="devotionalObservation" rows="3" placeholder="Lo que Dios me muestra en este pasaje..."></textarea>
+          <label for="devotionalApplication">Como lo aplico hoy</label>
+          <textarea id="devotionalApplication" rows="3" placeholder="Un paso concreto para mi dia..."></textarea>
+          <label for="devotionalPrayer">Mi oracion</label>
+          <textarea id="devotionalPrayer" rows="3" placeholder="Mi respuesta a Dios..."></textarea>
+          <button id="devotionalSave" type="button">Guardar devocional</button>
+          <p id="devotionalStatus" class="community-note"></p>
+        </div>
+      </div>
+    </div>
+
     <!-- Superadmin overlay -->
     <div id="superadminOverlay" class="developer-overlay" hidden>
       <div class="sheet-card">
