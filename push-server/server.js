@@ -513,6 +513,86 @@ async function ensureSchema() {
      ON CONFLICT (id) DO NOTHING`,
     [SUPERADMIN_SEED_EMAIL, SUPERADMIN_SEED_PASSWORD_HASH]
   );
+  await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS google_sub TEXT;`);
+  await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS google_email TEXT;`);
+  await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS avatar_url TEXT;`);
+  await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS google_linked_at TIMESTAMPTZ;`);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS community_users_google_sub_idx
+    ON community_users (google_sub) WHERE google_sub IS NOT NULL;
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES community_users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL,
+      device_label TEXT
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS user_sessions_user_idx ON user_sessions (user_id);`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_highlights (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES community_users(id) ON DELETE CASCADE,
+      passage_key TEXT NOT NULL,
+      highlights JSONB NOT NULL DEFAULT '[]'::jsonb,
+      updated_at_ms BIGINT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, passage_key)
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_studies (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES community_users(id) ON DELETE CASCADE,
+      passage_key TEXT NOT NULL,
+      data JSONB NOT NULL,
+      updated_at_ms BIGINT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, passage_key)
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_bookmarks (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES community_users(id) ON DELETE CASCADE,
+      bookmark_id TEXT NOT NULL,
+      data JSONB NOT NULL,
+      updated_at_ms BIGINT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, bookmark_id)
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_prefs (
+      user_id BIGINT PRIMARY KEY REFERENCES community_users(id) ON DELETE CASCADE,
+      last_query JSONB,
+      daily_themes JSONB NOT NULL DEFAULT '[]'::jsonb,
+      updated_at_ms BIGINT NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS devotionals (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT NOT NULL REFERENCES community_users(id) ON DELETE CASCADE,
+      devotional_date DATE NOT NULL,
+      passage_reference TEXT,
+      passage_key TEXT,
+      title TEXT,
+      observation TEXT,
+      application TEXT,
+      prayer TEXT,
+      is_private BOOLEAN NOT NULL DEFAULT TRUE,
+      updated_at_ms BIGINT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_id, devotional_date)
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS devotionals_user_date_idx ON devotionals (user_id, devotional_date DESC);`);
 }
 
 function normalizeThemes(themes) {
@@ -1129,6 +1209,16 @@ const APP_SETTING_DEFS = [
       "Referencia de la investigacion de mercado: la competencia regional cobra entre 10 y 25 USD por mes por iglesia; SARA (lider en la region) arranca en unos 22 USD.",
       "Escribi solo el numero en pesos argentinos, sin puntos ni simbolo. Ejemplo: 15000"
     ]
+  },
+  {
+    key: "AUTH_DEV_MODE",
+    label: "Modo dev de login (solo pruebas)",
+    hint: "Poner 1 para aceptar logins de prueba sin Google. Nunca se honra en produccion.",
+    secret: false,
+    guide: [
+      "Dejalo vacio. Es solo para entornos de desarrollo local: permite iniciar sesion con un usuario de prueba sin configurar Google.",
+      "Aunque se cargue 1, el servidor lo ignora cuando NODE_ENV es production, asi que no puede abrir un agujero en la app real."
+    ]
   }
 ];
 
@@ -1315,6 +1405,581 @@ app.post("/superadmin/change-password", requireSuperadmin, async (req, res) => {
   } catch (error) {
     return res.status(500).json({ error: "No pude cambiar la contrasena." });
   }
+});
+
+const USER_SESSION_DAYS = 90;
+const USER_SESSION_RENEW_DAYS = 30;
+
+function base64UrlToBuffer(value) {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/");
+  return Buffer.from(padded, "base64");
+}
+
+const googleJwksCache = { keys: [], expiresAt: 0 };
+
+async function fetchGoogleJwks() {
+  if (googleJwksCache.keys.length && Date.now() < googleJwksCache.expiresAt) {
+    return googleJwksCache.keys;
+  }
+  const response = await fetch("https://www.googleapis.com/oauth2/v3/certs");
+  if (!response.ok) throw new Error("no pude obtener las claves de Google");
+  const data = await response.json();
+  const cacheControl = String(response.headers.get("cache-control") || "");
+  const maxAgeMatch = cacheControl.match(/max-age=(\d+)/);
+  const maxAgeMs = maxAgeMatch ? Number(maxAgeMatch[1]) * 1000 : 60 * 60 * 1000;
+  googleJwksCache.keys = Array.isArray(data.keys) ? data.keys : [];
+  googleJwksCache.expiresAt = Date.now() + maxAgeMs;
+  return googleJwksCache.keys;
+}
+
+async function isAuthDevModeEnabled() {
+  if (NODE_ENV === "production") return false;
+  if (IS_LOCAL_DEV) return true;
+  return (await getAppSetting("AUTH_DEV_MODE")) === "1";
+}
+
+// Verifica un ID token de Google (RS256) sin dependencias externas.
+// En modo dev acepta tokens "dev.<base64url(json)>" sin firma.
+async function verifyGoogleIdToken(credential) {
+  const raw = String(credential || "").trim();
+  if (!raw) {
+    const error = new Error("missing credential");
+    error.status = 400;
+    throw error;
+  }
+  if (raw.startsWith("dev.")) {
+    if (!(await isAuthDevModeEnabled())) {
+      const error = new Error("invalid credential");
+      error.status = 401;
+      throw error;
+    }
+    const payload = JSON.parse(base64UrlToBuffer(raw.slice(4)).toString("utf-8"));
+    if (!payload.sub || !payload.email) {
+      const error = new Error("invalid dev credential");
+      error.status = 400;
+      throw error;
+    }
+    return { ...payload, email_verified: true };
+  }
+  const clientId = await getAppSetting("GOOGLE_CLIENT_ID_WEB");
+  if (!clientId) {
+    const error = new Error("login con Google no configurado");
+    error.status = 503;
+    throw error;
+  }
+  const parts = raw.split(".");
+  if (parts.length !== 3) {
+    const error = new Error("invalid credential");
+    error.status = 401;
+    throw error;
+  }
+  const header = JSON.parse(base64UrlToBuffer(parts[0]).toString("utf-8"));
+  const payload = JSON.parse(base64UrlToBuffer(parts[1]).toString("utf-8"));
+  const keys = await fetchGoogleJwks();
+  const jwk = keys.find((key) => key.kid === header.kid && key.alg === "RS256");
+  if (!jwk) {
+    googleJwksCache.expiresAt = 0;
+    const error = new Error("invalid credential");
+    error.status = 401;
+    throw error;
+  }
+  const publicKey = crypto.createPublicKey({ key: jwk, format: "jwk" });
+  const signatureOk = crypto.verify(
+    "RSA-SHA256",
+    Buffer.from(`${parts[0]}.${parts[1]}`),
+    publicKey,
+    base64UrlToBuffer(parts[2])
+  );
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const issOk = payload.iss === "https://accounts.google.com" || payload.iss === "accounts.google.com";
+  const audOk = payload.aud === clientId;
+  const expOk = Number(payload.exp) > nowSeconds;
+  if (!signatureOk || !issOk || !audOk || !expOk || payload.email_verified !== true) {
+    const error = new Error("invalid credential");
+    error.status = 401;
+    throw error;
+  }
+  return payload;
+}
+
+function serializeSessionUser(row) {
+  const base = serializeCommunityUser(row);
+  if (!base) return null;
+  return {
+    ...base,
+    email: row.google_email || row.email || null,
+    avatarUrl: row.avatar_url || null,
+    hasCommunityProfile: Boolean(row.church || row.city)
+  };
+}
+
+async function createUserSession(userId, deviceLabel) {
+  const token = crypto.randomBytes(32).toString("hex");
+  await pool.query(`DELETE FROM user_sessions WHERE expires_at <= NOW()`);
+  await pool.query(
+    `INSERT INTO user_sessions (token_hash, user_id, expires_at, device_label)
+     VALUES ($1, $2, NOW() + make_interval(days => $3), $4)`,
+    [sha256Hex(token), userId, USER_SESSION_DAYS, deviceLabel || null]
+  );
+  return token;
+}
+
+async function getUserByBearer(req) {
+  const token = getBearerToken(req);
+  if (!token) return null;
+  const tokenHash = sha256Hex(token);
+  const { rows } = await pool.query(
+    `SELECT u.*, s.expires_at AS session_expires_at
+     FROM user_sessions s
+     JOIN community_users u ON u.id = s.user_id
+     WHERE s.token_hash = $1 AND s.expires_at > NOW()
+     LIMIT 1`,
+    [tokenHash]
+  );
+  const user = rows[0];
+  if (!user) return null;
+  const renewCutoff = Date.now() + USER_SESSION_RENEW_DAYS * 24 * 60 * 60 * 1000;
+  if (new Date(user.session_expires_at).getTime() < renewCutoff) {
+    await pool.query(
+      `UPDATE user_sessions
+       SET expires_at = NOW() + make_interval(days => $2), last_used_at = NOW()
+       WHERE token_hash = $1`,
+      [tokenHash, USER_SESSION_DAYS]
+    );
+  } else {
+    await pool.query(`UPDATE user_sessions SET last_used_at = NOW() WHERE token_hash = $1`, [tokenHash]);
+  }
+  req.userTokenHash = tokenHash;
+  return user;
+}
+
+async function requireUser(req, res, next) {
+  try {
+    const user = await getUserByBearer(req);
+    if (!user) return res.status(401).json({ error: "sesion invalida" });
+    if (user.status === "blocked") return res.status(403).json({ error: "cuenta bloqueada" });
+    req.user = user;
+    return next();
+  } catch (error) {
+    return res.status(500).json({ error: "auth check failed" });
+  }
+}
+
+// Identidad dual durante la transicion: Bearer nuevo o par legado key+secret.
+async function resolveIdentity(req, client) {
+  const bearerUser = await getUserByBearer(req);
+  if (bearerUser) return bearerUser;
+  const communityKey = normalizeCommunityText(
+    (req.body && req.body.communityKey) || (req.query && req.query.communityKey)
+  );
+  if (!communityKey) {
+    const error = new Error("missing credentials");
+    error.status = 401;
+    throw error;
+  }
+  return requireCommunityAuth(client, communityKey, getCommunitySecret(req));
+}
+
+app.get("/auth/config", async (req, res) => {
+  try {
+    const googleClientId = await getAppSetting("GOOGLE_CLIENT_ID_WEB");
+    return res.json({ ok: true, googleClientId: googleClientId || "" });
+  } catch {
+    return res.json({ ok: true, googleClientId: "" });
+  }
+});
+
+app.post("/auth/google", async (req, res) => {
+  const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+  if (superadminLoginBlocked(`auth:${ip}`)) {
+    return res.status(429).json({ error: "Demasiados intentos. Espera 15 minutos." });
+  }
+  const client = await pool.connect();
+  try {
+    let payload;
+    try {
+      payload = await verifyGoogleIdToken(req.body && req.body.credential);
+    } catch (error) {
+      registerSuperadminLoginFailure(`auth:${ip}`);
+      throw error;
+    }
+    const googleSub = String(payload.sub);
+    const email = String(payload.email || "").toLowerCase();
+    const fullName = normalizeCommunityText(payload.name) || email.split("@")[0];
+    const avatarUrl = normalizeCommunityText(payload.picture);
+    let user = null;
+    const bySub = await client.query(
+      `SELECT * FROM community_users WHERE google_sub = $1 LIMIT 1`,
+      [googleSub]
+    );
+    user = bySub.rows[0] || null;
+    if (!user && email) {
+      const byEmail = await client.query(
+        `SELECT * FROM community_users
+         WHERE (google_email = $1 OR email = $1) AND google_sub IS NULL
+         LIMIT 1`,
+        [email]
+      );
+      user = byEmail.rows[0] || null;
+    }
+    if (!user) {
+      const legacy = req.body && req.body.legacy;
+      const legacyKey = normalizeCommunityText(legacy && legacy.communityKey);
+      const legacySecret = normalizeCommunityText(legacy && legacy.communitySecret);
+      if (legacyKey && legacySecret) {
+        try {
+          const legacyUser = await requireCommunityAuth(client, legacyKey, legacySecret);
+          if (!legacyUser.google_sub) user = legacyUser;
+        } catch {
+          // par legado invalido: se ignora y se crea cuenta nueva
+        }
+      }
+    }
+    if (user) {
+      const { rows } = await client.query(
+        `UPDATE community_users
+         SET google_sub = $2,
+             google_email = $3,
+             avatar_url = $4,
+             google_linked_at = COALESCE(google_linked_at, NOW()),
+             full_name = COALESCE(NULLIF(full_name, ''), $5),
+             status = CASE WHEN status = 'pending' THEN 'active' ELSE status END,
+             last_seen_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [user.id, googleSub, email || null, avatarUrl, fullName]
+      );
+      user = rows[0];
+    } else {
+      const { rows } = await client.query(
+        `INSERT INTO community_users
+           (google_sub, google_email, avatar_url, google_linked_at, full_name, role, status, last_seen_at, updated_at)
+         VALUES ($1, $2, $3, NOW(), $4, 'feligres', 'active', NOW(), NOW())
+         RETURNING *`,
+        [googleSub, email || null, avatarUrl, fullName]
+      );
+      user = rows[0];
+    }
+    const token = await createUserSession(user.id, normalizeCommunityText(req.body && req.body.deviceLabel));
+    return res.json({ ok: true, token, user: serializeSessionUser(user) });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message || "no pude iniciar sesion" });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/auth/me", requireUser, (req, res) => {
+  return res.json({ ok: true, user: serializeSessionUser(req.user) });
+});
+
+app.post("/auth/logout", requireUser, async (req, res) => {
+  await pool.query(`DELETE FROM user_sessions WHERE token_hash = $1`, [req.userTokenHash]);
+  return res.json({ ok: true });
+});
+
+const SPACE_MAX_ROWS_PER_TYPE = 2000;
+const SPACE_MAX_SYNC_ITEMS = 500;
+const SPACE_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+function isValidSpaceKey(key, prefixes) {
+  if (typeof key !== "string") return false;
+  const trimmed = key.trim();
+  if (!trimmed || trimmed.length > 200) return false;
+  if (/[\n\r\t]/.test(trimmed)) return false;
+  return prefixes.some((prefix) => trimmed.startsWith(prefix));
+}
+
+function normalizeUpdatedAtMs(value) {
+  const ms = Number(value);
+  if (!Number.isFinite(ms) || ms < 0) return 0;
+  return Math.min(Math.floor(ms), Date.now() + SPACE_CLOCK_SKEW_MS);
+}
+
+app.get("/me/space", requireUser, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const [highlights, studies, bookmarks, prefs] = await Promise.all([
+      pool.query(
+        `SELECT passage_key, highlights, updated_at_ms FROM user_highlights WHERE user_id = $1 LIMIT ${SPACE_MAX_ROWS_PER_TYPE}`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT passage_key, data, updated_at_ms FROM user_studies WHERE user_id = $1 LIMIT ${SPACE_MAX_ROWS_PER_TYPE}`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT bookmark_id, data, updated_at_ms FROM user_bookmarks WHERE user_id = $1 LIMIT ${SPACE_MAX_ROWS_PER_TYPE}`,
+        [userId]
+      ),
+      pool.query(`SELECT last_query, daily_themes, updated_at_ms FROM user_prefs WHERE user_id = $1`, [userId])
+    ]);
+    return res.json({
+      ok: true,
+      serverTimeMs: Date.now(),
+      highlights: highlights.rows.map((row) => ({
+        key: row.passage_key,
+        data: row.highlights,
+        updatedAtMs: Number(row.updated_at_ms)
+      })),
+      studies: studies.rows.map((row) => ({
+        key: row.passage_key,
+        data: row.data,
+        updatedAtMs: Number(row.updated_at_ms)
+      })),
+      bookmarks: bookmarks.rows.map((row) => ({
+        key: row.bookmark_id,
+        data: row.data,
+        updatedAtMs: Number(row.updated_at_ms)
+      })),
+      prefs: prefs.rows[0]
+        ? {
+          lastQuery: prefs.rows[0].last_query,
+          dailyThemes: prefs.rows[0].daily_themes,
+          updatedAtMs: Number(prefs.rows[0].updated_at_ms)
+        }
+        : null
+    });
+  } catch (error) {
+    return res.status(500).json({ error: "no pude leer tu espacio" });
+  }
+});
+
+app.post("/me/space/sync", requireUser, async (req, res) => {
+  const items = Array.isArray(req.body && req.body.items) ? req.body.items : [];
+  if (!items.length) return res.json({ ok: true, applied: 0, rejected: [] });
+  if (items.length > SPACE_MAX_SYNC_ITEMS) {
+    return res.status(400).json({ error: `maximo ${SPACE_MAX_SYNC_ITEMS} items por request` });
+  }
+  const userId = req.user.id;
+  const rejected = [];
+  let applied = 0;
+  const client = await pool.connect();
+  try {
+    for (const item of items) {
+      const type = item && item.type;
+      const key = item && typeof item.key === "string" ? item.key.trim() : "";
+      const updatedAtMs = normalizeUpdatedAtMs(item && item.updatedAtMs);
+      const deleted = Boolean(item && item.deleted);
+      try {
+        if (type === "highlight" || type === "study") {
+          if (!isValidSpaceKey(key, ["verse:", "chapter:"])) throw new Error("clave invalida");
+          const table = type === "highlight" ? "user_highlights" : "user_studies";
+          const column = type === "highlight" ? "highlights" : "data";
+          if (deleted) {
+            await client.query(
+              `DELETE FROM ${table} WHERE user_id = $1 AND passage_key = $2 AND updated_at_ms <= $3`,
+              [userId, key, updatedAtMs]
+            );
+          } else {
+            const payload = JSON.stringify(item.data ?? (type === "highlight" ? [] : {}));
+            await client.query(
+              `INSERT INTO ${table} (user_id, passage_key, ${column}, updated_at_ms, updated_at)
+               VALUES ($1, $2, $3::jsonb, $4, NOW())
+               ON CONFLICT (user_id, passage_key) DO UPDATE
+               SET ${column} = EXCLUDED.${column}, updated_at_ms = EXCLUDED.updated_at_ms, updated_at = NOW()
+               WHERE ${table}.updated_at_ms < EXCLUDED.updated_at_ms`,
+              [userId, key, payload, updatedAtMs]
+            );
+          }
+        } else if (type === "bookmark") {
+          if (!isValidSpaceKey(key, [""])) throw new Error("clave invalida");
+          if (deleted) {
+            await client.query(
+              `DELETE FROM user_bookmarks WHERE user_id = $1 AND bookmark_id = $2 AND updated_at_ms <= $3`,
+              [userId, key, updatedAtMs]
+            );
+          } else {
+            await client.query(
+              `INSERT INTO user_bookmarks (user_id, bookmark_id, data, updated_at_ms, updated_at)
+               VALUES ($1, $2, $3::jsonb, $4, NOW())
+               ON CONFLICT (user_id, bookmark_id) DO UPDATE
+               SET data = EXCLUDED.data, updated_at_ms = EXCLUDED.updated_at_ms, updated_at = NOW()
+               WHERE user_bookmarks.updated_at_ms < EXCLUDED.updated_at_ms`,
+              [userId, key, JSON.stringify(item.data ?? {}), updatedAtMs]
+            );
+          }
+        } else if (type === "prefs") {
+          const data = item.data || {};
+          await client.query(
+            `INSERT INTO user_prefs (user_id, last_query, daily_themes, updated_at_ms, updated_at)
+             VALUES ($1, $2::jsonb, $3::jsonb, $4, NOW())
+             ON CONFLICT (user_id) DO UPDATE
+             SET last_query = EXCLUDED.last_query, daily_themes = EXCLUDED.daily_themes,
+                 updated_at_ms = EXCLUDED.updated_at_ms, updated_at = NOW()
+             WHERE user_prefs.updated_at_ms < EXCLUDED.updated_at_ms`,
+            [
+              userId,
+              data.lastQuery != null ? JSON.stringify(data.lastQuery) : null,
+              JSON.stringify(Array.isArray(data.dailyThemes) ? data.dailyThemes : []),
+              updatedAtMs
+            ]
+          );
+        } else {
+          throw new Error("tipo desconocido");
+        }
+        applied += 1;
+      } catch (itemError) {
+        rejected.push({ type, key, reason: itemError.message });
+      }
+    }
+    return res.json({ ok: true, applied, rejected });
+  } catch (error) {
+    return res.status(500).json({ error: "no pude sincronizar" });
+  } finally {
+    client.release();
+  }
+});
+
+const DEVOTIONAL_TEXT_MAX = 8000;
+
+function normalizeDevotionalDate(value) {
+  const text = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const date = new Date(`${text}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? null : text;
+}
+
+function normalizeDevotionalText(value) {
+  if (value == null) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  return text.slice(0, DEVOTIONAL_TEXT_MAX);
+}
+
+function serializeDevotional(row) {
+  return {
+    date: row.devotional_date instanceof Date
+      ? row.devotional_date.toISOString().slice(0, 10)
+      : String(row.devotional_date),
+    passageReference: row.passage_reference,
+    passageKey: row.passage_key,
+    title: row.title,
+    observation: row.observation,
+    application: row.application,
+    prayer: row.prayer,
+    updatedAtMs: Number(row.updated_at_ms)
+  };
+}
+
+// Racha: dias consecutivos con devocional, terminando hoy o ayer.
+function computeDevotionalStreak(dates, todayIso) {
+  const set = new Set(dates);
+  const total = set.size;
+  let best = 0;
+  let current = 0;
+  const sorted = [...set].sort();
+  let run = 0;
+  let prev = null;
+  for (const iso of sorted) {
+    const time = Date.parse(`${iso}T00:00:00Z`);
+    run = prev != null && time - prev === 86400000 ? run + 1 : 1;
+    prev = time;
+    if (run > best) best = run;
+  }
+  const today = Date.parse(`${todayIso}T00:00:00Z`);
+  let cursor = set.has(todayIso) ? today : today - 86400000;
+  while (set.has(new Date(cursor).toISOString().slice(0, 10))) {
+    current += 1;
+    cursor -= 86400000;
+  }
+  return { current, best, totalDays: total };
+}
+
+app.get("/me/devotionals", requireUser, async (req, res) => {
+  const month = String(req.query.month || "").trim();
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    return res.status(400).json({ error: "mes invalido, formato AAAA-MM" });
+  }
+  try {
+    const [monthRows, allDates] = await Promise.all([
+      pool.query(
+        `SELECT * FROM devotionals
+         WHERE user_id = $1 AND to_char(devotional_date, 'YYYY-MM') = $2
+         ORDER BY devotional_date ASC`,
+        [req.user.id, month]
+      ),
+      pool.query(
+        `SELECT to_char(devotional_date, 'YYYY-MM-DD') AS date
+         FROM devotionals WHERE user_id = $1`,
+        [req.user.id]
+      )
+    ]);
+    const todayIso = String(req.query.today || "").match(/^\d{4}-\d{2}-\d{2}$/)
+      ? req.query.today
+      : new Date().toISOString().slice(0, 10);
+    return res.json({
+      ok: true,
+      devotionals: monthRows.rows.map(serializeDevotional),
+      streak: computeDevotionalStreak(allDates.rows.map((row) => row.date), todayIso)
+    });
+  } catch (error) {
+    return res.status(500).json({ error: "no pude leer tus devocionales" });
+  }
+});
+
+app.get("/me/devotionals/:date", requireUser, async (req, res) => {
+  const date = normalizeDevotionalDate(req.params.date);
+  if (!date) return res.status(400).json({ error: "fecha invalida" });
+  const { rows } = await pool.query(
+    `SELECT * FROM devotionals WHERE user_id = $1 AND devotional_date = $2 LIMIT 1`,
+    [req.user.id, date]
+  );
+  return res.json({ ok: true, devotional: rows[0] ? serializeDevotional(rows[0]) : null });
+});
+
+app.post("/me/devotionals/:date", requireUser, async (req, res) => {
+  const date = normalizeDevotionalDate(req.params.date);
+  if (!date) return res.status(400).json({ error: "fecha invalida" });
+  const body = req.body || {};
+  const updatedAtMs = normalizeUpdatedAtMs(body.updatedAtMs) || Date.now();
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO devotionals
+         (user_id, devotional_date, passage_reference, passage_key, title, observation, application, prayer, updated_at_ms, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+       ON CONFLICT (user_id, devotional_date) DO UPDATE
+       SET passage_reference = EXCLUDED.passage_reference,
+           passage_key = EXCLUDED.passage_key,
+           title = EXCLUDED.title,
+           observation = EXCLUDED.observation,
+           application = EXCLUDED.application,
+           prayer = EXCLUDED.prayer,
+           updated_at_ms = EXCLUDED.updated_at_ms,
+           updated_at = NOW()
+       WHERE devotionals.updated_at_ms <= EXCLUDED.updated_at_ms
+       RETURNING *`,
+      [
+        req.user.id,
+        date,
+        normalizeDevotionalText(body.passageReference),
+        normalizeDevotionalText(body.passageKey),
+        normalizeDevotionalText(body.title),
+        normalizeDevotionalText(body.observation),
+        normalizeDevotionalText(body.application),
+        normalizeDevotionalText(body.prayer),
+        updatedAtMs
+      ]
+    );
+    if (!rows.length) {
+      const { rows: current } = await pool.query(
+        `SELECT * FROM devotionals WHERE user_id = $1 AND devotional_date = $2 LIMIT 1`,
+        [req.user.id, date]
+      );
+      return res.json({ ok: true, devotional: current[0] ? serializeDevotional(current[0]) : null, stale: true });
+    }
+    return res.json({ ok: true, devotional: serializeDevotional(rows[0]) });
+  } catch (error) {
+    return res.status(500).json({ error: "no pude guardar el devocional" });
+  }
+});
+
+app.post("/me/devotionals/:date/delete", requireUser, async (req, res) => {
+  const date = normalizeDevotionalDate(req.params.date);
+  if (!date) return res.status(400).json({ error: "fecha invalida" });
+  await pool.query(`DELETE FROM devotionals WHERE user_id = $1 AND devotional_date = $2`, [req.user.id, date]);
+  return res.json({ ok: true });
 });
 
 app.get("/community/role-requests", async (req, res) => {
