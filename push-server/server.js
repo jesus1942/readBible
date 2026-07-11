@@ -2014,6 +2014,40 @@ app.post("/community/profile", async (req, res) => {
   const address = normalizeCommunityText(req.body && req.body.address) || null;
   const latitude = req.body && req.body.latitude != null ? normalizeCoordinate(req.body.latitude, null) : null;
   const longitude = req.body && req.body.longitude != null ? normalizeCoordinate(req.body.longitude, null) : null;
+  // Sesion nueva (Bearer): se actualiza la fila del usuario logueado y de
+  // paso se le vincula la clave local del dispositivo para los endpoints
+  // legados, si todavia no tiene una.
+  const bearerUser = await getUserByBearer(req).catch(() => null);
+  if (bearerUser) {
+    try {
+      if (communityKey && !bearerUser.community_key) {
+        await pool.query(
+          `UPDATE community_users SET community_key = $2, community_secret = COALESCE(community_secret, $3)
+           WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM community_users WHERE community_key = $2)`,
+          [bearerUser.id, communityKey, communitySecret]
+        );
+      }
+      const { rows } = await pool.query(
+        `UPDATE community_users
+         SET full_name = COALESCE($2, full_name),
+             display_name = COALESCE($3, display_name),
+             city = $4,
+             church = $5,
+             address = $6,
+             latitude = $7,
+             longitude = $8,
+             status = CASE WHEN status = 'pending' THEN 'active' ELSE status END,
+             last_seen_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [bearerUser.id, fullName, displayName, city, church, address, latitude, longitude]
+      );
+      return res.json({ ok: true, profile: serializeSessionUser(rows[0]) });
+    } catch (error) {
+      return res.status(500).json({ error: "failed to save profile" });
+    }
+  }
   if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
   if (!communitySecret) return res.status(401).json({ error: "missing communitySecret" });
   if (!fullName) return res.status(400).json({ error: "missing fullName" });

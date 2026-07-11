@@ -136,7 +136,7 @@ const pushToggle = document.getElementById("pushToggle");
 const pushStatus = document.getElementById("pushStatus");
 const pushDebug = document.getElementById("pushDebug");
 const pushResubscribe = document.getElementById("pushResubscribe");
-const communityFullName = document.getElementById("communityFullName");
+const communityIdentity = document.getElementById("communityIdentity");
 const communityRole = document.getElementById("communityRole");
 const communityCity = document.getElementById("communityCity");
 const communityChurch = document.getElementById("communityChurch");
@@ -384,7 +384,7 @@ function updateCommunityUi(info) {
   }
   if (communityForm) communityForm.hidden = hasData;
   if (communityEdit) communityEdit.hidden = !hasData;
-  if (communityFullName) communityFullName.value = fullName;
+  renderCommunityIdentity();
   if (communityRole) communityRole.value = requestedRole || role || "feligres";
   if (communityCity) communityCity.value = city;
   if (communityChurch) communityChurch.value = church;
@@ -640,6 +640,10 @@ async function useCommunityViewerLocation() {
 
 async function communityRequest(path, options) {
   const opts = { ...(options || {}) };
+  const auth = window.ReadBibleAuth;
+  if (auth && auth.hasSession()) {
+    opts.headers = { ...(opts.headers || {}), Authorization: `Bearer ${auth.getSessionToken()}` };
+  }
   const secret = getCommunitySecret();
   // Se manda en cuerpo (POST) o query (GET), no en header, para no romper
   // CORS si el backend viejo todavia no tiene el redeploy.
@@ -855,15 +859,37 @@ async function loadCommunityData(showMessage) {
   }
 }
 
+function renderCommunityIdentity() {
+  if (!communityIdentity) return;
+  const auth = window.ReadBibleAuth;
+  const user = auth ? auth.getSessionUser() : null;
+  if (!user) {
+    communityIdentity.innerHTML = "";
+    return;
+  }
+  const avatar = user.avatarUrl
+    ? `<img class="account-avatar" src="${escapeHtml(user.avatarUrl)}" alt="" referrerpolicy="no-referrer" />`
+    : `<span class="account-avatar account-avatar-letter">${escapeHtml((user.fullName || "?").charAt(0).toUpperCase())}</span>`;
+  communityIdentity.innerHTML = `
+    <div class="account-row">
+      ${avatar}
+      <div>
+        <p class="account-name">${escapeHtml(user.fullName || "")}</p>
+        <p class="account-email">${escapeHtml(user.email || "")}</p>
+      </div>
+    </div>
+  `;
+}
+
 async function saveCommunityProfile() {
   const communityKey = getCommunityKey();
-  const fullName = communityFullName ? communityFullName.value.trim() : "";
   const city = communityCity ? communityCity.value.trim() : "";
   const church = communityChurch ? communityChurch.value.trim() : "";
   const address = communityAddress ? communityAddress.value.trim() : "";
   const localInfo = readCommunityInfo();
+  const fullName = getUserName() || localInfo.fullName || "";
   if (!fullName) {
-    setCommunityStatus("Escribe tu nombre para guardar el perfil.", true);
+    setCommunityStatus("Inicia sesion para guardar tu perfil.", true);
     return;
   }
   const payload = {
@@ -3832,7 +3858,7 @@ addListener(communityEdit, "click", () => {
   if (communityForm) communityForm.hidden = false;
   if (communityEdit) communityEdit.hidden = true;
   if (communitySummary) communitySummary.hidden = true;
-  if (communityFullName) communityFullName.value = info.fullName || "";
+  renderCommunityIdentity();
   if (communityRole) communityRole.value = info.requestedRole || info.role || "feligres";
   if (communityCity) communityCity.value = info.city || "";
   if (communityChurch) communityChurch.value = info.church || "";
