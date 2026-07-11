@@ -800,8 +800,7 @@ button:active {
   overflow-y: auto;
 }
 
-.community-note,
-.community-api-hint {
+.community-note {
   margin: 0;
   color: #5b4630;
   font-size: 13px;

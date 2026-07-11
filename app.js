@@ -154,7 +154,6 @@ const communityOpen = document.getElementById("communityOpen");
 const communityOverlay = document.getElementById("communityOverlay");
 const communityClose = document.getElementById("communityClose");
 const communityStatus = document.getElementById("communityStatus");
-const communityApiHint = document.getElementById("communityApiHint");
 const communityRefresh = document.getElementById("communityRefresh");
 const communityAdminSection = document.getElementById("communityAdminSection");
 const communityAdminCodeGroup = document.getElementById("communityAdminCodeGroup");
@@ -831,12 +830,6 @@ async function loadCommunityData(showMessage) {
     updateCommunityUi(merged);
   } else {
     updateCommunityUi(localInfo);
-  }
-  if (communityApiHint) {
-    const localApproval = communityState.auth && communityState.auth.roleApprovalMode === "admin_code"
-      ? ` · codigo local: ${communityState.auth.localAdminCodeHint || "configurado"}`
-      : "";
-    communityApiHint.textContent = `API: ${getPushServerUrl()}${localApproval}`;
   }
   renderCommunityLocations();
   renderCommunityEvents();
@@ -4142,7 +4135,6 @@ initTour();
 initUpdateBanner();
 const communityInfo = readCommunityInfo();
 updateCommunityUi(communityInfo);
-if (communityApiHint) communityApiHint.textContent = `API: ${getPushServerUrl()}`;
 getCommunityKey();
 if (typeof location !== "undefined") {
   const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
