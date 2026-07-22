@@ -1,5 +1,12 @@
 # Plan maestro para terminar readBible
 
+> Estado actualizado: 22 de julio de 2026. El bloque base ya esta implementado:
+> aislamiento por iglesia, ciclo de eventos, check-in geografico y checkout,
+> presencia viva, materiales de celulas, gestion de miembros y KPIs, eventos
+> recurrentes, control developer de iglesias y estructura de login multiplataforma.
+> La integracion comercial de MercadoPago sigue deliberadamente desactivada
+> hasta contar con credenciales reales y validar el flujo de cobro.
+
 Fecha: 2026-07-10
 Rama de trabajo: `claude/religious-app-plan-efbls4` — Produccion: `main`
 (frontend en GitHub Pages, backend Express+PostgreSQL en Railway:

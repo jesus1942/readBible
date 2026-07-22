@@ -15,6 +15,7 @@ const ENTRIES = [
   "styles.css",
   "core.js",
   "net.js",
+  "auth.js",
   "app.js",
   "daily_verses.json",
   "efemerides.json",

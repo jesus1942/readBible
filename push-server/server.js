@@ -6,6 +6,13 @@ import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "node:crypto";
 import * as cheerio from "cheerio";
+import {
+  buildRecurringDates,
+  canCheckInToEvent,
+  determineEventStatus,
+  distanceMeters,
+  normalizeChurchKey
+} from "./community-utils.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,12 +33,14 @@ const CORS_ORIGINS = (process.env.CORS_ORIGINS || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
-const SUPERADMIN_SEED_EMAIL = process.env.SUPERADMIN_EMAIL || "denovaje@proton.me";
-// Hash scrypt (salt:hash) usado solo para sembrar la cuenta la primera vez;
-// despues manda lo que haya en la tabla superadmin_account.
-const SUPERADMIN_SEED_PASSWORD_HASH = process.env.SUPERADMIN_PASSWORD_HASH ||
-  "be3c3205c3f79810afbb0b2941dbcf9d:c428a1e6f9ad4d13cb793591603c06d7bd03f4da88f43c7c3a9db1dcd421c957df8f56d3bca1a99cef40684fae13f5cdbff53811b14124de8f56179b12e5c8cf";
+// Estas variables solo se usan para crear la primera cuenta. Nunca hay
+// credenciales de produccion dentro del repositorio.
+const SUPERADMIN_SEED_EMAIL = String(process.env.SUPERADMIN_EMAIL || "").trim().toLowerCase();
+const SUPERADMIN_SEED_PASSWORD_HASH = String(process.env.SUPERADMIN_PASSWORD_HASH || "").trim();
 const SUPERADMIN_SESSION_DAYS = 7;
+const EVENT_DEFAULT_DURATION_MINUTES = Math.max(15, Number(process.env.EVENT_DEFAULT_DURATION_MINUTES || 120));
+const CHECK_IN_EARLY_MINUTES = Math.max(0, Number(process.env.CHECK_IN_EARLY_MINUTES || 30));
+const LIVE_PRESENCE_TTL_SECONDS = Math.max(60, Number(process.env.LIVE_PRESENCE_TTL_SECONDS || 180));
 
 if (!DATABASE_URL) {
   throw new Error("DATABASE_URL is required");
@@ -156,6 +165,7 @@ async function ensureSchema() {
   await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS address TEXT;`);
   await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;`);
   await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;`);
+  await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS is_church_admin BOOLEAN NOT NULL DEFAULT FALSE;`);
   await pool.query(`CREATE INDEX IF NOT EXISTS community_users_coords_idx ON community_users (latitude, longitude) WHERE latitude IS NOT NULL;`);
   await pool.query(`
     DO $$
@@ -207,6 +217,16 @@ async function ensureSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS community_users_status_idx ON community_users (status);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS community_users_city_idx ON community_users (city);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS community_users_church_idx ON community_users (church);`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS community_users_church_admin_idx ON community_users (church, is_church_admin) WHERE is_church_admin = TRUE;`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS church_registry (
+      church_key TEXT PRIMARY KEY,
+      display_name TEXT NOT NULL,
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS community_locations (
       id BIGSERIAL PRIMARY KEY,
@@ -391,6 +411,16 @@ async function ensureSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS community_event_attendance_user_idx ON community_event_attendance (user_id);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS community_event_attendance_status_idx ON community_event_attendance (status);`);
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_live_presence (
+      user_id BIGINT PRIMARY KEY REFERENCES community_users(id) ON DELETE CASCADE,
+      event_id BIGINT NOT NULL REFERENCES community_events(id) ON DELETE CASCADE,
+      latitude DOUBLE PRECISION NOT NULL,
+      longitude DOUBLE PRECISION NOT NULL,
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS community_live_presence_event_idx ON community_live_presence (event_id, last_seen_at);`);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS community_notification_preferences (
       user_id BIGINT PRIMARY KEY REFERENCES community_users(id) ON DELETE CASCADE,
       enabled BOOLEAN NOT NULL DEFAULT TRUE,
@@ -486,6 +516,18 @@ async function ensureSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS community_study_materials_cell_idx ON community_study_materials (cell_id);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS community_study_materials_event_idx ON community_study_materials (event_id);`);
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS church_subscriptions (
+      church_key TEXT PRIMARY KEY REFERENCES church_registry(church_key) ON DELETE CASCADE,
+      provider TEXT NOT NULL DEFAULT 'mercadopago',
+      provider_subscription_id TEXT,
+      status TEXT NOT NULL DEFAULT 'not_configured',
+      trial_ends_at TIMESTAMPTZ,
+      current_period_ends_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
@@ -507,12 +549,14 @@ async function ensureSchema() {
       expires_at TIMESTAMPTZ NOT NULL
     );
   `);
-  await pool.query(
-    `INSERT INTO superadmin_account (id, email, password_hash)
-     VALUES (1, $1, $2)
-     ON CONFLICT (id) DO NOTHING`,
-    [SUPERADMIN_SEED_EMAIL, SUPERADMIN_SEED_PASSWORD_HASH]
-  );
+  if (SUPERADMIN_SEED_EMAIL && SUPERADMIN_SEED_PASSWORD_HASH) {
+    await pool.query(
+      `INSERT INTO superadmin_account (id, email, password_hash)
+       VALUES (1, $1, $2)
+       ON CONFLICT (id) DO NOTHING`,
+      [SUPERADMIN_SEED_EMAIL, SUPERADMIN_SEED_PASSWORD_HASH]
+    );
+  }
   await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS google_sub TEXT;`);
   await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS google_email TEXT;`);
   await pool.query(`ALTER TABLE community_users ADD COLUMN IF NOT EXISTS avatar_url TEXT;`);
@@ -593,6 +637,42 @@ async function ensureSchema() {
     );
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS devotionals_user_date_idx ON devotionals (user_id, devotional_date DESC);`);
+  await pool.query(`ALTER TABLE devotionals ADD COLUMN IF NOT EXISTS mood TEXT;`);
+  await pool.query(`
+    INSERT INTO church_registry (church_key, display_name)
+    SELECT DISTINCT ON (REGEXP_REPLACE(LOWER(TRIM(church)), '[[:space:]]+', ' ', 'g'))
+      REGEXP_REPLACE(LOWER(TRIM(church)), '[[:space:]]+', ' ', 'g'), TRIM(church)
+    FROM community_users
+    WHERE NULLIF(TRIM(church), '') IS NOT NULL
+    ORDER BY REGEXP_REPLACE(LOWER(TRIM(church)), '[[:space:]]+', ' ', 'g')
+    ON CONFLICT (church_key) DO NOTHING;
+  `);
+  await pool.query(`
+    INSERT INTO church_registry (church_key, display_name)
+    SELECT DISTINCT ON (REGEXP_REPLACE(LOWER(TRIM(church)), '[[:space:]]+', ' ', 'g'))
+      REGEXP_REPLACE(LOWER(TRIM(church)), '[[:space:]]+', ' ', 'g'), TRIM(church)
+    FROM community_locations
+    WHERE NULLIF(TRIM(church), '') IS NOT NULL
+    ORDER BY REGEXP_REPLACE(LOWER(TRIM(church)), '[[:space:]]+', ' ', 'g')
+    ON CONFLICT (church_key) DO NOTHING;
+  `);
+  await pool.query(`
+    WITH first_leaders AS (
+      SELECT DISTINCT ON (REGEXP_REPLACE(LOWER(TRIM(church)), '[[:space:]]+', ' ', 'g')) id
+      FROM community_users u
+      WHERE u.role = 'dirigente'
+        AND u.status = 'active'
+        AND NULLIF(TRIM(u.church), '') IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM community_users admin
+          WHERE admin.is_church_admin = TRUE
+            AND REGEXP_REPLACE(LOWER(TRIM(admin.church)), '[[:space:]]+', ' ', 'g') = REGEXP_REPLACE(LOWER(TRIM(u.church)), '[[:space:]]+', ' ', 'g')
+        )
+      ORDER BY REGEXP_REPLACE(LOWER(TRIM(church)), '[[:space:]]+', ' ', 'g'), created_at ASC
+    )
+    UPDATE community_users SET is_church_admin = TRUE
+    WHERE id IN (SELECT id FROM first_leaders);
+  `);
 }
 
 function normalizeThemes(themes) {
@@ -773,6 +853,80 @@ function normalizeCoordinate(value, fallback) {
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
+function requireChurch(user) {
+  const churchKey = normalizeChurchKey(user && user.church);
+  if (!churchKey) {
+    const error = new Error("completa tu iglesia antes de usar esta funcion");
+    error.status = 400;
+    throw error;
+  }
+  return churchKey;
+}
+
+function assertSameChurch(user, church) {
+  const churchKey = requireChurch(user);
+  if (churchKey !== normalizeChurchKey(church)) {
+    const error = new Error("el recurso pertenece a otra iglesia");
+    error.status = 403;
+    throw error;
+  }
+  return churchKey;
+}
+
+async function ensureChurchRegistered(client, church) {
+  const displayName = normalizeCommunityText(church);
+  const churchKey = normalizeChurchKey(displayName);
+  if (!churchKey) return null;
+  await client.query(
+    `INSERT INTO church_registry (church_key, display_name, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (church_key) DO UPDATE SET display_name = EXCLUDED.display_name, updated_at = NOW()`,
+    [churchKey, displayName]
+  );
+  return churchKey;
+}
+
+async function requireActiveChurch(client, church) {
+  const churchKey = normalizeChurchKey(church);
+  if (!churchKey) return null;
+  const { rows } = await client.query(
+    `SELECT is_active FROM church_registry WHERE church_key = $1 LIMIT 1`,
+    [churchKey]
+  );
+  if (rows[0] && !rows[0].is_active) {
+    const error = new Error("esta iglesia esta deshabilitada temporalmente");
+    error.status = 403;
+    throw error;
+  }
+  return churchKey;
+}
+
+function requireChurchAdmin(user) {
+  if (!user || user.role !== "dirigente" || !user.is_church_admin) {
+    const error = new Error("se requiere administracion de iglesia");
+    error.status = 403;
+    throw error;
+  }
+}
+
+function requireDeveloperCode(req) {
+  const code = normalizeCommunityText(
+    (req.body && req.body.developerCode) ||
+    (req.query && req.query.developerCode) ||
+    req.headers["x-developer-secret"]
+  );
+  if (!COMMUNITY_DEVELOPER_CODE) {
+    const error = new Error("developer mode disabled");
+    error.status = 403;
+    throw error;
+  }
+  if (code !== COMMUNITY_DEVELOPER_CODE) {
+    const error = new Error("invalid developer code");
+    error.status = 401;
+    throw error;
+  }
+}
+
 function serializeCommunityUser(row) {
   if (!row) return null;
   return {
@@ -783,6 +937,7 @@ function serializeCommunityUser(row) {
     city: row.city,
     church: row.church,
     role: row.role,
+    isChurchAdmin: Boolean(row.is_church_admin),
     requestedRole: row.requested_role,
     requestedAt: row.requested_at,
     status: row.status,
@@ -875,12 +1030,15 @@ function serializeCommunityMember(row) {
   return data;
 }
 
-async function listCommunityLocations(client) {
+async function listCommunityLocations(client, church) {
+  const churchKey = normalizeChurchKey(church);
+  if (!churchKey) return [];
   const { rows } = await client.query(
     `SELECT id, slug, name, description, address, city, church, latitude, longitude, is_active
      FROM community_locations
-     WHERE is_active = TRUE
-     ORDER BY name ASC`
+     WHERE is_active = TRUE AND REGEXP_REPLACE(LOWER(TRIM(church)), '[[:space:]]+', ' ', 'g') = $1
+     ORDER BY name ASC`,
+    [churchKey]
   );
   return rows.map((row) => ({
     id: row.id,
@@ -896,7 +1054,27 @@ async function listCommunityLocations(client) {
   }));
 }
 
-async function listCommunityEvents(client) {
+async function refreshEventStatuses(client) {
+  const { rows } = await client.query(
+    `SELECT id, status, starts_at, ends_at, allow_check_in
+     FROM community_events
+     WHERE status IN ('scheduled', 'live')`
+  );
+  for (const event of rows) {
+    const nextStatus = determineEventStatus(event, new Date(), EVENT_DEFAULT_DURATION_MINUTES);
+    if (nextStatus && nextStatus !== event.status) {
+      await client.query(
+        `UPDATE community_events SET status = $2, updated_at = NOW() WHERE id = $1`,
+        [event.id, nextStatus]
+      );
+    }
+  }
+}
+
+async function listCommunityEvents(client, church) {
+  const churchKey = normalizeChurchKey(church);
+  if (!churchKey) return [];
+  await refreshEventStatuses(client);
   const { rows } = await client.query(
     `SELECT
        e.id,
@@ -925,14 +1103,18 @@ async function listCommunityEvents(client) {
      JOIN community_locations l ON l.id = e.location_id
      LEFT JOIN community_event_attendance a ON a.event_id = e.id
      WHERE e.status IN ('scheduled', 'live')
+       AND REGEXP_REPLACE(LOWER(TRIM(l.church)), '[[:space:]]+', ' ', 'g') = $1
      GROUP BY e.id, l.id
      ORDER BY e.starts_at ASC
-     LIMIT 25`
+     LIMIT 25`,
+    [churchKey]
   );
   return rows.map((row) => ({
     id: row.id,
     locationId: row.location_id,
     title: row.title,
+    mood: row.mood || null,
+    isPrivate: row.is_private !== false,
     description: row.description,
     eventType: row.event_type,
     visibility: row.visibility,
@@ -970,14 +1152,18 @@ async function getEventAttendanceForUser(client, eventId, userId) {
   return rows[0] || null;
 }
 
-async function listPendingRoleRequests(client) {
+async function listPendingRoleRequests(client, church) {
+  const churchKey = normalizeChurchKey(church);
+  if (!churchKey) return [];
   const { rows } = await client.query(
     `SELECT id, community_key, full_name, display_name, city, church, role, requested_role, requested_at, status
      FROM community_users
      WHERE requested_role IS NOT NULL
        AND requested_role <> role
        AND status = 'active'
-     ORDER BY requested_at ASC NULLS LAST, created_at ASC`
+       AND REGEXP_REPLACE(LOWER(TRIM(church)), '[[:space:]]+', ' ', 'g') = $1
+     ORDER BY requested_at ASC NULLS LAST, created_at ASC`,
+    [churchKey]
   );
   return rows.map((row) => ({
     id: row.id,
@@ -1070,13 +1256,13 @@ app.get("/vapid-public-key", (req, res) => {
 });
 
 app.get("/community/bootstrap", async (req, res) => {
-  const communityKey = normalizeCommunityText(req.query.communityKey);
   const client = await pool.connect();
   try {
-    const user = await getCommunityUserByKey(client, communityKey);
+    const user = await resolveIdentity(req, client);
+    if (user.church) await requireActiveChurch(client, user.church);
     const [locations, events] = await Promise.all([
-      listCommunityLocations(client),
-      listCommunityEvents(client)
+      listCommunityLocations(client, user.church),
+      listCommunityEvents(client, user.church)
     ]);
     let attendance = [];
     let pendingRoleRequests = [];
@@ -1094,7 +1280,7 @@ app.get("/community/bootstrap", async (req, res) => {
         checkedInAt: row.checked_in_at
       }));
       if (user.role === "dirigente") {
-        pendingRoleRequests = await listPendingRoleRequests(client);
+        pendingRoleRequests = await listPendingRoleRequests(client, user.church);
       }
     }
     return res.json({
@@ -1109,20 +1295,61 @@ app.get("/community/bootstrap", async (req, res) => {
       attendance,
       pendingRoleRequests
     });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message || "failed to load community" });
   } finally {
     client.release();
   }
 });
 
 app.post("/community/developer-auth", (req, res) => {
-  const code = normalizeCommunityText(req.body && req.body.code);
-  if (!COMMUNITY_DEVELOPER_CODE) {
-    return res.status(403).json({ error: "developer mode disabled" });
+  try {
+    req.body = { ...(req.body || {}), developerCode: req.body && req.body.code };
+    requireDeveloperCode(req);
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
   }
-  if (!code || code !== COMMUNITY_DEVELOPER_CODE) {
-    return res.status(401).json({ error: "invalid developer code" });
+});
+
+app.post("/community/developer/churches/list", async (req, res) => {
+  try {
+    requireDeveloperCode(req);
+    const { rows } = await pool.query(
+      `SELECT r.church_key AS "churchKey", r.display_name AS name, r.is_active AS "isActive",
+              COUNT(DISTINCT l.id)::int AS locations,
+              COUNT(DISTINCT u.id)::int AS members
+       FROM church_registry r
+       LEFT JOIN community_locations l ON REGEXP_REPLACE(LOWER(TRIM(l.church)), '[[:space:]]+', ' ', 'g') = r.church_key
+       LEFT JOIN community_users u ON REGEXP_REPLACE(LOWER(TRIM(u.church)), '[[:space:]]+', ' ', 'g') = r.church_key
+       GROUP BY r.church_key, r.display_name, r.is_active
+       ORDER BY r.display_name`
+    );
+    return res.json({ ok: true, churches: rows });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
   }
-  return res.json({ ok: true });
+});
+
+app.post("/community/developer/churches/:churchKey/status", async (req, res) => {
+  try {
+    requireDeveloperCode(req);
+    const churchKey = normalizeChurchKey(req.params.churchKey);
+    const isActive = req.body && req.body.isActive;
+    if (!churchKey || typeof isActive !== "boolean") {
+      return res.status(400).json({ error: "invalid church status" });
+    }
+    const { rows } = await pool.query(
+      `UPDATE church_registry SET is_active = $2, updated_at = NOW()
+       WHERE church_key = $1
+       RETURNING church_key AS "churchKey", display_name AS name, is_active AS "isActive"`,
+      [churchKey, isActive]
+    );
+    if (!rows.length) return res.status(404).json({ error: "church not found" });
+    return res.json({ ok: true, church: rows[0] });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
 });
 
 const APP_SETTING_DEFS = [
@@ -1304,6 +1531,11 @@ app.post("/superadmin/login", async (req, res) => {
   try {
     const { rows } = await pool.query(`SELECT email, password_hash FROM superadmin_account WHERE id = 1`);
     const account = rows[0];
+    if (!account) {
+      return res.status(503).json({
+        error: "Superadmin no configurado. Define SUPERADMIN_EMAIL y SUPERADMIN_PASSWORD_HASH en Railway."
+      });
+    }
     const emailOk = account && account.email.toLowerCase() === email;
     const passwordOk = account && verifySuperadminPassword(password, account.password_hash);
     if (!emailOk || !passwordOk) {
@@ -1461,8 +1693,12 @@ async function verifyGoogleIdToken(credential) {
     }
     return { ...payload, email_verified: true };
   }
-  const clientId = await getAppSetting("GOOGLE_CLIENT_ID_WEB");
-  if (!clientId) {
+  const clientIds = (await Promise.all([
+    getAppSetting("GOOGLE_CLIENT_ID_WEB"),
+    getAppSetting("GOOGLE_CLIENT_ID_ANDROID"),
+    getAppSetting("GOOGLE_CLIENT_ID_IOS")
+  ])).filter(Boolean);
+  if (!clientIds.length) {
     const error = new Error("login con Google no configurado");
     error.status = 503;
     throw error;
@@ -1492,7 +1728,8 @@ async function verifyGoogleIdToken(credential) {
   );
   const nowSeconds = Math.floor(Date.now() / 1000);
   const issOk = payload.iss === "https://accounts.google.com" || payload.iss === "accounts.google.com";
-  const audOk = payload.aud === clientId;
+  const tokenAudiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+  const audOk = tokenAudiences.some((audience) => clientIds.includes(audience));
   const expOk = Number(payload.exp) > nowSeconds;
   if (!signatureOk || !issOk || !audOk || !expOk || payload.email_verified !== true) {
     const error = new Error("invalid credential");
@@ -1582,10 +1819,19 @@ async function resolveIdentity(req, client) {
 
 app.get("/auth/config", async (req, res) => {
   try {
-    const googleClientId = await getAppSetting("GOOGLE_CLIENT_ID_WEB");
-    return res.json({ ok: true, googleClientId: googleClientId || "" });
+    const [googleClientId, googleAndroidClientId, googleIosClientId] = await Promise.all([
+      getAppSetting("GOOGLE_CLIENT_ID_WEB"),
+      getAppSetting("GOOGLE_CLIENT_ID_ANDROID"),
+      getAppSetting("GOOGLE_CLIENT_ID_IOS")
+    ]);
+    return res.json({
+      ok: true,
+      googleClientId: googleClientId || "",
+      googleAndroidClientId: googleAndroidClientId || "",
+      googleIosClientId: googleIosClientId || ""
+    });
   } catch {
-    return res.json({ ok: true, googleClientId: "" });
+    return res.json({ ok: true, googleClientId: "", googleAndroidClientId: "", googleIosClientId: "" });
   }
 });
 
@@ -1937,8 +2183,8 @@ app.post("/me/devotionals/:date", requireUser, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `INSERT INTO devotionals
-         (user_id, devotional_date, passage_reference, passage_key, title, observation, application, prayer, updated_at_ms, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+         (user_id, devotional_date, passage_reference, passage_key, title, observation, application, prayer, mood, is_private, updated_at_ms, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
        ON CONFLICT (user_id, devotional_date) DO UPDATE
        SET passage_reference = EXCLUDED.passage_reference,
            passage_key = EXCLUDED.passage_key,
@@ -1946,6 +2192,8 @@ app.post("/me/devotionals/:date", requireUser, async (req, res) => {
            observation = EXCLUDED.observation,
            application = EXCLUDED.application,
            prayer = EXCLUDED.prayer,
+           mood = EXCLUDED.mood,
+           is_private = EXCLUDED.is_private,
            updated_at_ms = EXCLUDED.updated_at_ms,
            updated_at = NOW()
        WHERE devotionals.updated_at_ms <= EXCLUDED.updated_at_ms
@@ -1959,6 +2207,8 @@ app.post("/me/devotionals/:date", requireUser, async (req, res) => {
         normalizeDevotionalText(body.observation),
         normalizeDevotionalText(body.application),
         normalizeDevotionalText(body.prayer),
+        normalizeDevotionalText(body.mood),
+        body.isPrivate !== false,
         updatedAtMs
       ]
     );
@@ -1994,7 +2244,7 @@ app.get("/community/role-requests", async (req, res) => {
     if (!canListByRole && !canListByCode) {
       return res.status(403).json({ error: "approval not allowed" });
     }
-    const requests = await listPendingRoleRequests(client);
+    const requests = await listPendingRoleRequests(client, user.church);
     return res.json({ ok: true, requests });
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.message || "failed to list requests" });
@@ -2009,7 +2259,8 @@ app.post("/community/profile", async (req, res) => {
   const fullName = normalizeCommunityText(req.body && req.body.fullName);
   const displayName = normalizeCommunityText(req.body && req.body.displayName);
   const city = normalizeCommunityText(req.body && req.body.city);
-  const church = normalizeCommunityText(req.body && req.body.church);
+  const churchValue = normalizeCommunityText(req.body && req.body.church);
+  const church = churchValue ? churchValue.replace(/\s+/g, " ") : null;
   const status = normalizeCommunityStatus(req.body && req.body.status);
   const address = normalizeCommunityText(req.body && req.body.address) || null;
   const latitude = req.body && req.body.latitude != null ? normalizeCoordinate(req.body.latitude, null) : null;
@@ -2020,6 +2271,9 @@ app.post("/community/profile", async (req, res) => {
   const bearerUser = await getUserByBearer(req).catch(() => null);
   if (bearerUser) {
     try {
+      if (bearerUser.role !== "feligres" && normalizeChurchKey(bearerUser.church) !== normalizeChurchKey(church)) {
+        return res.status(403).json({ error: "un dirigente o colaborador no puede cambiar de iglesia desde su perfil" });
+      }
       if (communityKey && !bearerUser.community_key) {
         await pool.query(
           `UPDATE community_users SET community_key = $2, community_secret = COALESCE(community_secret, $3)
@@ -2043,6 +2297,8 @@ app.post("/community/profile", async (req, res) => {
          RETURNING *`,
         [bearerUser.id, fullName, displayName, city, church, address, latitude, longitude]
       );
+      await ensureChurchRegistered(pool, church);
+      await requireActiveChurch(pool, church);
       return res.json({ ok: true, profile: serializeSessionUser(rows[0]) });
     } catch (error) {
       return res.status(500).json({ error: "failed to save profile" });
@@ -2058,6 +2314,9 @@ app.post("/community/profile", async (req, res) => {
     if (existing) {
       if (existing.community_secret && existing.community_secret !== communitySecret) {
         return res.status(401).json({ error: "invalid credentials" });
+      }
+      if (existing.role !== "feligres" && normalizeChurchKey(existing.church) !== normalizeChurchKey(church)) {
+        return res.status(403).json({ error: "un dirigente o colaborador no puede cambiar de iglesia desde su perfil" });
       }
       ({ rows } = await client.query(
         `UPDATE community_users
@@ -2076,6 +2335,8 @@ app.post("/community/profile", async (req, res) => {
          RETURNING *`,
         [communityKey, fullName, displayName, city, church, status, address, latitude, longitude, communitySecret]
       ));
+      await ensureChurchRegistered(client, church);
+      await requireActiveChurch(client, church);
     } else {
       ({ rows } = await client.query(
         `INSERT INTO community_users
@@ -2085,6 +2346,8 @@ app.post("/community/profile", async (req, res) => {
          RETURNING *`,
         [communityKey, fullName, displayName, city, church, status, address, latitude, longitude, communitySecret]
       ));
+      await ensureChurchRegistered(client, church);
+      await requireActiveChurch(client, church);
     }
     return res.json({ ok: true, profile: serializeCommunityUser(rows[0]) });
   } catch (error) {
@@ -2114,6 +2377,93 @@ app.get("/community/members-map", async (req, res) => {
     return res.json({ ok: true, members: rows.map(serializeCommunityMember) });
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.message || "failed" });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/community/admin/summary", async (req, res) => {
+  const communityKey = normalizeCommunityText(req.query.communityKey);
+  if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
+  const client = await pool.connect();
+  try {
+    const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
+    requireChurchAdmin(user);
+    const churchKey = requireChurch(user);
+    const [members, events, attendance, subscription] = await Promise.all([
+      client.query(
+        `SELECT COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE role = 'dirigente')::int AS dirigentes,
+                COUNT(*) FILTER (WHERE role = 'colaborador')::int AS colaboradores,
+                COUNT(*) FILTER (WHERE role = 'feligres')::int AS feligreses
+         FROM community_users WHERE status = 'active' AND REGEXP_REPLACE(LOWER(TRIM(church)), '[[:space:]]+', ' ', 'g') = $1`,
+        [churchKey]
+      ),
+      client.query(
+        `SELECT COUNT(*)::int AS total
+         FROM community_events e JOIN community_locations l ON l.id = e.location_id
+         WHERE REGEXP_REPLACE(LOWER(TRIM(l.church)), '[[:space:]]+', ' ', 'g') = $1 AND e.starts_at >= date_trunc('month', NOW())`,
+        [churchKey]
+      ),
+      client.query(
+        `SELECT COUNT(*)::int AS total
+         FROM community_event_attendance a
+         JOIN community_events e ON e.id = a.event_id
+         JOIN community_locations l ON l.id = e.location_id
+         WHERE REGEXP_REPLACE(LOWER(TRIM(l.church)), '[[:space:]]+', ' ', 'g') = $1
+           AND a.checked_in_at >= date_trunc('month', NOW())`,
+        [churchKey]
+      ),
+      client.query(
+        `SELECT status, trial_ends_at AS "trialEndsAt", current_period_ends_at AS "currentPeriodEndsAt"
+         FROM church_subscriptions WHERE church_key = $1`,
+        [churchKey]
+      )
+    ]);
+    return res.json({
+      ok: true,
+      members: members.rows[0],
+      eventsThisMonth: events.rows[0].total,
+      checkInsThisMonth: attendance.rows[0].total,
+      subscription: subscription.rows[0] || { status: "not_configured" }
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message || "failed to load admin summary" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/community/admin/members/:memberId", async (req, res) => {
+  const memberId = Number(req.params.memberId);
+  const communityKey = normalizeCommunityText(req.body && req.body.communityKey);
+  const role = req.body && req.body.role != null ? normalizeCommunityRole(req.body.role) : null;
+  const status = req.body && req.body.status != null ? normalizeCommunityStatus(req.body.status) : null;
+  const isChurchAdmin = req.body && typeof req.body.isChurchAdmin === "boolean" ? req.body.isChurchAdmin : null;
+  if (!Number.isInteger(memberId) || memberId <= 0 || !communityKey) {
+    return res.status(400).json({ error: "invalid member update" });
+  }
+  const client = await pool.connect();
+  try {
+    const actor = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
+    requireChurchAdmin(actor);
+    const { rows: targets } = await client.query(`SELECT * FROM community_users WHERE id = $1 LIMIT 1`, [memberId]);
+    const target = targets[0];
+    if (!target) return res.status(404).json({ error: "member not found" });
+    assertSameChurch(actor, target.church);
+    if (target.id === actor.id && (status === "blocked" || status === "inactive" || isChurchAdmin === false)) {
+      return res.status(400).json({ error: "no podes quitar tu propio acceso administrativo" });
+    }
+    const { rows } = await client.query(
+      `UPDATE community_users
+       SET role = COALESCE($2, role), status = COALESCE($3, status),
+           is_church_admin = COALESCE($4, is_church_admin), updated_at = NOW()
+       WHERE id = $1 RETURNING *`,
+      [memberId, role, status, isChurchAdmin]
+    );
+    return res.json({ ok: true, member: serializeCommunityMember(rows[0]) });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message || "failed to update member" });
   } finally {
     client.release();
   }
@@ -2161,7 +2511,7 @@ app.post("/community/approve-role", async (req, res) => {
     }
     const user = await getCommunityUserByKey(client, targetCommunityKey);
     if (!user) return res.status(404).json({ error: "target user not found" });
-    if (canApproveByRole && !canApproveByCode && actor.church && user.church !== actor.church) {
+    if (normalizeChurchKey(actor.church) !== normalizeChurchKey(user.church)) {
       return res.status(403).json({ error: "no podes aprobar usuarios de otra iglesia" });
     }
     const { rows } = await client.query(
@@ -2176,6 +2526,21 @@ app.post("/community/approve-role", async (req, res) => {
        RETURNING *`,
       [user.id, approvedRole, actor.id]
     );
+    if (approvedRole === "dirigente") {
+      await client.query(
+        `UPDATE community_users candidate
+         SET is_church_admin = TRUE, updated_at = NOW()
+         WHERE candidate.id = $1
+           AND NOT EXISTS (
+             SELECT 1 FROM community_users existing
+             WHERE existing.is_church_admin = TRUE
+               AND REGEXP_REPLACE(LOWER(TRIM(existing.church)), '[[:space:]]+', ' ', 'g') = REGEXP_REPLACE(LOWER(TRIM(candidate.church)), '[[:space:]]+', ' ', 'g')
+           )`,
+        [user.id]
+      );
+      const refreshed = await client.query(`SELECT * FROM community_users WHERE id = $1`, [user.id]);
+      rows[0] = refreshed.rows[0];
+    }
     return res.json({ ok: true, profile: serializeCommunityMember(rows[0]) });
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.message || "failed to approve role" });
@@ -2189,16 +2554,22 @@ app.post("/community/locations", async (req, res) => {
   const name = normalizeCommunityText(req.body && req.body.name);
   const address = normalizeCommunityText(req.body && req.body.address);
   const city = normalizeCommunityText(req.body && req.body.city);
-  const church = normalizeCommunityText(req.body && req.body.church);
   const description = normalizeCommunityText(req.body && req.body.description);
-  const latitude = normalizeCoordinate(req.body && req.body.latitude, -42.7692);
-  const longitude = normalizeCoordinate(req.body && req.body.longitude, -65.0385);
+  const requestedLatitude = normalizeCoordinate(req.body && req.body.latitude, null);
+  const requestedLongitude = normalizeCoordinate(req.body && req.body.longitude, null);
   if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
   if (!name) return res.status(400).json({ error: "missing name" });
   const client = await pool.connect();
   try {
     const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
     requireLeaderRole(user);
+    const church = normalizeCommunityText(user.church);
+    await requireActiveChurch(client, church);
+    const latitude = requestedLatitude != null ? requestedLatitude : normalizeCoordinate(user.latitude, null);
+    const longitude = requestedLongitude != null ? requestedLongitude : normalizeCoordinate(user.longitude, null);
+    if (latitude == null || longitude == null) {
+      return res.status(400).json({ error: "guarda una ubicacion antes de crear la sede" });
+    }
     const slugBase = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     const slug = `${slugBase || "sede"}-${Date.now().toString(36)}`;
     const { rows } = await client.query(
@@ -2239,6 +2610,9 @@ app.post("/community/events", async (req, res) => {
   const startsAt = normalizeCommunityText(req.body && req.body.startsAt);
   const endsAt = normalizeCommunityText(req.body && req.body.endsAt);
   const timezone = normalizeCommunityText(req.body && req.body.timezone) || "UTC";
+  const recurrence = ["weekly", "monthly"].includes(req.body && req.body.recurrence)
+    ? req.body.recurrence
+    : "none";
   if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
   if (!Number.isInteger(locationId) || locationId <= 0) return res.status(400).json({ error: "invalid locationId" });
   if (!title) return res.status(400).json({ error: "missing title" });
@@ -2247,16 +2621,40 @@ app.post("/community/events", async (req, res) => {
   try {
     const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
     requireLeaderRole(user);
-    const { rows } = await client.query(
-      `INSERT INTO community_events
-         (location_id, created_by_user_id, title, description, starts_at, ends_at, timezone, status, allow_check_in, updated_at)
-       VALUES
-         ($1, $2, $3, $4, $5, $6, $7, 'scheduled', TRUE, NOW())
-       RETURNING id`,
-      [locationId, user.id, title, description, startsAt, endsAt, timezone]
+    await requireActiveChurch(client, user.church);
+    const { rows: locationRows } = await client.query(
+      `SELECT id, church FROM community_locations WHERE id = $1 AND is_active = TRUE LIMIT 1`,
+      [locationId]
     );
-    return res.json({ ok: true, eventId: rows[0].id });
+    if (!locationRows.length) return res.status(404).json({ error: "location not found" });
+    assertSameChurch(user, locationRows[0].church);
+    const occurrences = buildRecurringDates(startsAt, recurrence, recurrence === "none" ? 1 : 12);
+    if (!occurrences.length) return res.status(400).json({ error: "invalid startsAt" });
+    const durationMs = endsAt ? new Date(endsAt).getTime() - new Date(startsAt).getTime() : null;
+    const seriesId = recurrence === "none" ? null : crypto.randomUUID();
+    const eventIds = [];
+    await client.query("BEGIN");
+    for (const occurrence of occurrences) {
+      const occurrenceEnd = durationMs != null && durationMs >= 0
+        ? new Date(occurrence.getTime() + durationMs).toISOString()
+        : null;
+      const { rows } = await client.query(
+        `INSERT INTO community_events
+           (location_id, created_by_user_id, title, description, starts_at, ends_at, timezone, status, allow_check_in, metadata, updated_at)
+         VALUES
+           ($1, $2, $3, $4, $5, $6, $7, 'scheduled', TRUE, $8::jsonb, NOW())
+         RETURNING id`,
+        [
+          locationId, user.id, title, description, occurrence.toISOString(), occurrenceEnd, timezone,
+          JSON.stringify({ recurrence, seriesId })
+        ]
+      );
+      eventIds.push(rows[0].id);
+    }
+    await client.query("COMMIT");
+    return res.json({ ok: true, eventId: eventIds[0], eventIds, recurrence });
   } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
     return res.status(error.status || 500).json({ error: error.message || "failed to create event" });
   } finally {
     client.release();
@@ -2266,35 +2664,59 @@ app.post("/community/events", async (req, res) => {
 app.post("/community/events/:eventId/check-in", async (req, res) => {
   const eventId = Number(req.params.eventId);
   const communityKey = normalizeCommunityText(req.body && req.body.communityKey);
+  const latitude = req.body && req.body.latitude != null ? normalizeCoordinate(req.body.latitude, null) : null;
+  const longitude = req.body && req.body.longitude != null ? normalizeCoordinate(req.body.longitude, null) : null;
   if (!Number.isInteger(eventId) || eventId <= 0) return res.status(400).json({ error: "invalid eventId" });
   if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
   const client = await pool.connect();
   try {
     const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
+    await refreshEventStatuses(client);
     const { rows: eventRows } = await client.query(
-      `SELECT id, allow_check_in, status
-       FROM community_events
-       WHERE id = $1
+      `SELECT e.id, e.allow_check_in, e.status, e.starts_at, e.ends_at,
+              e.notify_radius_meters, l.church, l.latitude, l.longitude
+       FROM community_events e
+       JOIN community_locations l ON l.id = e.location_id
+       WHERE e.id = $1
        LIMIT 1`,
       [eventId]
     );
     const event = eventRows[0];
     if (!event) return res.status(404).json({ error: "event not found" });
-    if (!event.allow_check_in || !["scheduled", "live"].includes(event.status)) {
+    assertSameChurch(user, event.church);
+    if (!canCheckInToEvent(event, new Date(), CHECK_IN_EARLY_MINUTES, EVENT_DEFAULT_DURATION_MINUTES)) {
       return res.status(400).json({ error: "check-in not allowed" });
     }
+    const hasCoordinates = latitude != null && longitude != null;
+    const distance = hasCoordinates
+      ? distanceMeters(latitude, longitude, event.latitude, event.longitude)
+      : null;
+    const radius = Number(event.notify_radius_meters || 1200);
+    if (hasCoordinates && (distance == null || distance > radius)) {
+      return res.status(400).json({
+        error: "estas fuera del radio permitido para este evento",
+        distanceMeters: distance == null ? null : Math.round(distance),
+        allowedMeters: radius
+      });
+    }
+    const method = hasCoordinates ? "geo" : "manual";
+    const metadata = hasCoordinates
+      ? { latitude, longitude, distanceMeters: Math.round(distance) }
+      : {};
     await client.query(
       `INSERT INTO community_event_attendance
-         (event_id, user_id, role_at_check_in, check_in_method, status, checked_in_at, updated_at)
+         (event_id, user_id, role_at_check_in, check_in_method, status, checked_in_at, metadata, updated_at)
        VALUES
-         ($1, $2, $3, 'manual', 'checked_in', NOW(), NOW())
+         ($1, $2, $3, $4, 'checked_in', NOW(), $5::jsonb, NOW())
        ON CONFLICT (event_id, user_id) DO UPDATE SET
          role_at_check_in = EXCLUDED.role_at_check_in,
+         check_in_method = EXCLUDED.check_in_method,
          status = 'checked_in',
          checked_in_at = NOW(),
          checked_out_at = NULL,
+         metadata = EXCLUDED.metadata,
          updated_at = NOW()`,
-      [eventId, user.id, user.role]
+      [eventId, user.id, user.role, method, JSON.stringify(metadata)]
     );
     const attendance = await getEventAttendanceForUser(client, eventId, user.id);
     return res.json({
@@ -2304,7 +2726,9 @@ app.post("/community/events/:eventId/check-in", async (req, res) => {
         userId: user.id,
         status: attendance.status,
         roleAtCheckIn: attendance.role_at_check_in,
-        checkedInAt: attendance.checked_in_at
+        checkedInAt: attendance.checked_in_at,
+        method,
+        distanceMeters: distance == null ? null : Math.round(distance)
       }
     });
   } catch (error) {
@@ -2314,32 +2738,110 @@ app.post("/community/events/:eventId/check-in", async (req, res) => {
   }
 });
 
-app.get("/community/study-cells", async (req, res) => {
-  const { communityKey, church } = req.query;
+app.post("/community/events/:eventId/check-out", async (req, res) => {
+  const eventId = Number(req.params.eventId);
+  const communityKey = normalizeCommunityText(req.body && req.body.communityKey);
+  if (!Number.isInteger(eventId) || eventId <= 0) return res.status(400).json({ error: "invalid eventId" });
+  if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
   const client = await pool.connect();
   try {
-    let rows;
-    if (church) {
-      const result = await client.query(
-        `SELECT sc.id, sc.name, sc.description, sc.meeting_day AS "meetingDay", sc.meeting_time AS "meetingTime",
-                sc.location_id AS "locationId", sc.leader_name AS leader, sc.church, sc.city, sc.is_active AS "isActive"
-         FROM community_study_cells sc
-         WHERE sc.church = $1 AND sc.is_active = TRUE
-         ORDER BY sc.name ASC`,
-        [church]
-      );
-      rows = result.rows;
-    } else {
-      const result = await client.query(
-        `SELECT sc.id, sc.name, sc.description, sc.meeting_day AS "meetingDay", sc.meeting_time AS "meetingTime",
-                sc.location_id AS "locationId", sc.leader_name AS leader, sc.church, sc.city, sc.is_active AS "isActive"
-         FROM community_study_cells sc
-         WHERE sc.is_active = TRUE
-         ORDER BY sc.name ASC
-         LIMIT 50`
-      );
-      rows = result.rows;
-    }
+    const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
+    const { rows } = await client.query(
+      `UPDATE community_event_attendance a
+       SET status = 'checked_out', checked_out_at = NOW(), updated_at = NOW()
+       FROM community_events e
+       JOIN community_locations l ON l.id = e.location_id
+       WHERE a.event_id = $1 AND a.user_id = $2 AND a.event_id = e.id
+         AND REGEXP_REPLACE(LOWER(TRIM(l.church)), '[[:space:]]+', ' ', 'g') = $3
+       RETURNING a.id, a.checked_out_at`,
+      [eventId, user.id, requireChurch(user)]
+    );
+    if (!rows.length) return res.status(404).json({ error: "attendance not found" });
+    await client.query(`DELETE FROM community_live_presence WHERE user_id = $1`, [user.id]);
+    return res.json({ ok: true, status: "checked_out", checkedOutAt: rows[0].checked_out_at });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message || "failed to check out" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/community/live-presence", async (req, res) => {
+  const eventId = Number(req.body && req.body.eventId);
+  const communityKey = normalizeCommunityText(req.body && req.body.communityKey);
+  const latitude = normalizeCoordinate(req.body && req.body.latitude, null);
+  const longitude = normalizeCoordinate(req.body && req.body.longitude, null);
+  if (!Number.isInteger(eventId) || latitude == null || longitude == null || !communityKey) {
+    return res.status(400).json({ error: "invalid live presence" });
+  }
+  const client = await pool.connect();
+  try {
+    const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
+    const { rows } = await client.query(
+      `SELECT a.id, e.status, l.church
+       FROM community_event_attendance a
+       JOIN community_events e ON e.id = a.event_id
+       JOIN community_locations l ON l.id = e.location_id
+       WHERE a.event_id = $1 AND a.user_id = $2 AND a.status = 'checked_in'`,
+      [eventId, user.id]
+    );
+    if (!rows.length) return res.status(403).json({ error: "check-in required" });
+    assertSameChurch(user, rows[0].church);
+    await client.query(
+      `INSERT INTO community_live_presence (user_id, event_id, latitude, longitude, last_seen_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (user_id) DO UPDATE SET
+         event_id = EXCLUDED.event_id, latitude = EXCLUDED.latitude,
+         longitude = EXCLUDED.longitude, last_seen_at = NOW()`,
+      [user.id, eventId, latitude, longitude]
+    );
+    return res.json({ ok: true, expiresInSeconds: LIVE_PRESENCE_TTL_SECONDS });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message || "failed to update presence" });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/community/live-map", async (req, res) => {
+  const communityKey = normalizeCommunityText(req.query.communityKey);
+  if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
+  const client = await pool.connect();
+  try {
+    const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
+    requireLeaderRole(user);
+    const { rows } = await client.query(
+      `SELECT p.event_id AS "eventId", p.latitude, p.longitude, p.last_seen_at AS "lastSeenAt",
+              u.display_name AS "displayName", u.full_name AS "fullName", u.role
+       FROM community_live_presence p
+       JOIN community_users u ON u.id = p.user_id
+       JOIN community_events e ON e.id = p.event_id
+       JOIN community_locations l ON l.id = e.location_id
+       WHERE p.last_seen_at > NOW() - make_interval(secs => $1)
+         AND REGEXP_REPLACE(LOWER(TRIM(l.church)), '[[:space:]]+', ' ', 'g') = $2`,
+      [LIVE_PRESENCE_TTL_SECONDS, requireChurch(user)]
+    );
+    return res.json({ ok: true, presence: rows, expiresInSeconds: LIVE_PRESENCE_TTL_SECONDS });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message || "failed to load presence" });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/community/study-cells", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const user = await resolveIdentity(req, client);
+    const churchKey = requireChurch(user);
+    const { rows } = await client.query(
+      `SELECT sc.id, sc.name, sc.description, sc.meeting_day AS "meetingDay", sc.meeting_time AS "meetingTime",
+              sc.location_id AS "locationId", sc.leader_name AS leader, sc.church, sc.city, sc.is_active AS "isActive"
+       FROM community_study_cells sc
+       WHERE REGEXP_REPLACE(LOWER(TRIM(sc.church)), '[[:space:]]+', ' ', 'g') = $1 AND sc.is_active = TRUE
+       ORDER BY sc.name ASC`,
+      [churchKey]
+    );
     return res.json({ cells: rows });
   } catch (error) {
     return res.status(500).json({ error: error.message || "failed to load study cells" });
@@ -2349,13 +2851,24 @@ app.get("/community/study-cells", async (req, res) => {
 });
 
 app.post("/community/study-cells", async (req, res) => {
-  const { communityKey, name, meetingDay, meetingTime, locationId, church, city } = req.body || {};
+  const { communityKey, name, meetingDay, meetingTime, locationId } = req.body || {};
   if (!communityKey) return res.status(400).json({ error: "missing communityKey" });
   if (!name || !name.trim()) return res.status(400).json({ error: "missing cell name" });
   const client = await pool.connect();
   try {
     const user = await requireCommunityAuth(client, communityKey, getCommunitySecret(req));
     if (user.role !== "dirigente") return res.status(403).json({ error: "solo los dirigentes pueden crear celulas" });
+    const church = normalizeCommunityText(user.church);
+    const city = normalizeCommunityText(user.city);
+    await requireActiveChurch(client, church);
+    if (locationId) {
+      const { rows: locations } = await client.query(
+        `SELECT church FROM community_locations WHERE id = $1 AND is_active = TRUE LIMIT 1`,
+        [locationId]
+      );
+      if (!locations.length) return res.status(404).json({ error: "location not found" });
+      assertSameChurch(user, locations[0].church);
+    }
     const result = await client.query(
       `INSERT INTO community_study_cells (name, meeting_day, meeting_time, location_id, created_by_user_id, church, city)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -2366,13 +2879,37 @@ app.post("/community/study-cells", async (req, res) => {
         meetingTime || null,
         locationId || null,
         user.id,
-        church || null,
-        city || null
+        church,
+        city
       ]
     );
     return res.json({ cell: result.rows[0] });
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.message || "failed to create study cell" });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/community/study-materials", async (req, res) => {
+  const cellId = Number(req.query.cellId);
+  if (!Number.isInteger(cellId) || cellId <= 0) return res.status(400).json({ error: "invalid cellId" });
+  const client = await pool.connect();
+  try {
+    const user = await resolveIdentity(req, client);
+    const { rows } = await client.query(
+      `SELECT m.id, m.cell_id AS "cellId", m.event_id AS "eventId", m.title, m.body,
+              m.bible_reference AS "bibleReference", m.source, m.created_at AS "createdAt"
+       FROM community_study_materials m
+       JOIN community_study_cells c ON c.id = m.cell_id
+       WHERE m.cell_id = $1 AND m.is_active = TRUE
+         AND c.is_active = TRUE AND REGEXP_REPLACE(LOWER(TRIM(c.church)), '[[:space:]]+', ' ', 'g') = $2
+       ORDER BY m.created_at DESC`,
+      [cellId, requireChurch(user)]
+    );
+    return res.json({ ok: true, materials: rows });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message || "failed to load study materials" });
   } finally {
     client.release();
   }
@@ -2388,13 +2925,35 @@ app.post("/community/study-materials", async (req, res) => {
     if (!["dirigente", "colaborador"].includes(user.role)) {
       return res.status(403).json({ error: "se requiere rol colaborador o dirigente" });
     }
+    const normalizedCellId = Number(cellId) || null;
+    const normalizedEventId = Number(eventId) || null;
+    if (!normalizedCellId && !normalizedEventId) {
+      return res.status(400).json({ error: "cellId or eventId required" });
+    }
+    if (normalizedCellId) {
+      const { rows: cells } = await client.query(
+        `SELECT church FROM community_study_cells WHERE id = $1 AND is_active = TRUE LIMIT 1`,
+        [normalizedCellId]
+      );
+      if (!cells.length) return res.status(404).json({ error: "study cell not found" });
+      assertSameChurch(user, cells[0].church);
+    }
+    if (normalizedEventId) {
+      const { rows: events } = await client.query(
+        `SELECT l.church FROM community_events e JOIN community_locations l ON l.id = e.location_id
+         WHERE e.id = $1 LIMIT 1`,
+        [normalizedEventId]
+      );
+      if (!events.length) return res.status(404).json({ error: "event not found" });
+      assertSameChurch(user, events[0].church);
+    }
     const result = await client.query(
       `INSERT INTO community_study_materials (cell_id, event_id, title, body, bible_reference, source, created_by_user_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, cell_id AS "cellId", event_id AS "eventId", title, body, bible_reference AS "bibleReference", source`,
       [
-        cellId || null,
-        eventId || null,
+        normalizedCellId,
+        normalizedEventId,
         title.trim(),
         body || null,
         bibleReference || null,
@@ -2688,6 +3247,22 @@ loadDailyVerses()
     app.listen(PORT, () => {
       console.log(`Push server running on ${PORT}`);
     });
+    const timer = setInterval(async () => {
+      const client = await pool.connect();
+      try {
+        await refreshEventStatuses(client);
+        await client.query(
+          `DELETE FROM community_live_presence
+           WHERE last_seen_at <= NOW() - make_interval(secs => $1)`,
+          [LIVE_PRESENCE_TTL_SECONDS]
+        );
+      } catch (error) {
+        console.error("Community maintenance failed", error);
+      } finally {
+        client.release();
+      }
+    }, 60000);
+    timer.unref();
   })
   .catch((err) => {
     console.error("Failed to init schema", err);

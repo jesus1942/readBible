@@ -1,48 +1,64 @@
-# BibleApp PWA
+# Lectura Viva
 
-Una Progressive Web App (PWA) minimalista para leer la Biblia, diseñada para una experiencia de lectura plena y sin distracciones.
+PWA de lectura biblica con modo offline, busqueda por referencia, lectura plena,
+marcadores, notas, devocionales sincronizados y espacios de comunidad para
+iglesias. El mismo frontend se empaqueta para Android e iOS con Capacitor.
 
-## Características
+## Componentes
 
-*   **Lectura sin distracciones**: Modo de lectura sin distracciones.
-*   **Búsqueda Rápida**: Busca por libro, capítulo y versículo.
-*   **Múltiples Versiones**: Soporte para RVR1960, NVI, LBLA, y más.
-*   **Offline First**: Funciona sin conexión una vez cargada (gracias al Service Worker).
-*   **Versículo del Día**: Inspiración diaria.
-*   **Compartir**: Genera imágenes de versículos para compartir en redes sociales.
+- Frontend estatico: `index.html`, `app.js`, `auth.js`, `core.js`, `net.js` y
+  `styles.css`. GitHub Pages publica `main`.
+- API: `push-server/server.js`, Express y PostgreSQL. Railway debe usar
+  `push-server` como directorio raiz y ejecutar `npm start`.
+- Aplicaciones moviles: proyectos `android/` e `ios/`; `npm run sync` genera y
+  copia el contenido de `www/`.
 
-## Desarrollo Local
+## Funciones actuales
 
-Para ejecutar la aplicación localmente, necesitas Python 3 instalado.
+- Lectura, busqueda, resaltados, notas, marcadores y funcionamiento offline.
+- Login web con Google, sesion persistente y migracion de datos locales.
+- Estructura de login nativo separada para Android e iOS, desactivada hasta
+  instalar el adaptador y cargar sus Client IDs.
+- Devocionales con calendario, racha, titulo, estado de animo, privacidad,
+  borrador offline y borrado.
+- Iglesias aisladas entre si, sedes, eventos simples o recurrentes, ciclo
+  automatico de estados, geolocalizacion, check-in, checkout y presencia viva.
+- Celulas y materiales de estudio consultables desde la aplicacion.
+- Gestion de iglesia con indicadores mensuales, miembros, roles y estados.
+- Panel developer para habilitar o deshabilitar iglesias.
+- Consola superadmin para configuracion de integraciones sin secretos en Git.
 
-1.  Clona el repositorio:
-    ```bash
-    git clone https://github.com/jesus1942/readBible.git
-    cd readBible
-    ```
+## Desarrollo local
 
-2.  Inicia la app completa en local:
-    ```bash
-    ./start_local_stack.sh
-    ```
-    Esto levanta:
-    - la PWA en `http://<tu-ip>:8080`
-    - la API local en `http://127.0.0.1:3000`
-    - un proxy `/api/*` desde la PWA hacia la API, para probar desde otros dispositivos sin hardcodear puertos en frontend
+Requisitos: Node.js 20 o superior, Python 3 y PostgreSQL.
 
-3.  Si solo quieres la PWA estática sin API:
-    ```bash
-    ./start_pwa_server.sh
-    ```
-    O manualmente:
-    ```bash
-    python3 server.py --port 8080
-    ```
+```bash
+npm install
+./start_local_stack.sh
+```
 
-4.  Abre tu navegador en la URL que imprime el script. Si estás usando solo la PWA estática, abre `http://localhost:8080`.
+La PWA queda en `http://localhost:8080` y usa el proxy local `/api` hacia la API.
+Las variables necesarias para el backend estan documentadas en
+`push-server/.env.example`.
 
-## Estructura
+## Pruebas y build
 
-*   `app.js`: Lógica principal de la aplicación.
-*   `server.py`: Servidor de desarrollo local con proxy CORS integrado.
-*   `daily_verses.json`: Base de datos de versículos diarios.
+```bash
+npm test
+npm run build:www
+node --check push-server/server.js
+```
+
+La prueba de empaquetado verifica que todos los scripts locales referenciados
+por `index.html`, incluido `auth.js`, existan dentro de `www/`.
+
+## Despliegue
+
+- Un push a `main` actualiza GitHub Pages y dispara el deploy configurado en
+  Railway.
+- Railway ejecuta las migraciones idempotentes incluidas en `ensureSchema()` al
+  iniciar la API.
+- Las credenciales se cargan como variables de Railway o desde superadmin; nunca
+  deben agregarse al repositorio.
+
+Para compilar las aplicaciones de tiendas, ver `GUIA-APP-MOVIL.md`.

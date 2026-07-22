@@ -5,6 +5,10 @@ Arquitectura del proyecto readBible
 - No hay build tool; assets y lógica están en archivos planos.
 - Service Worker para cache offline.
 - Datos locales (daily_verses.json, efemerides.json).
+- Aislamiento multi-iglesia aplicado en API mediante la iglesia de la identidad
+  autenticada y claves normalizadas en `church_registry`.
+- Ciclo de eventos y presencia temporal mantenidos por la API en Railway.
+- Autenticacion Google con Client IDs separados para web, Android e iOS.
 
 2) Estructura de archivos
 - index.html: estructura principal, overlays, menú, ayuda, script Umami, splash canvas.
@@ -64,4 +68,3 @@ Arquitectura del proyecto readBible
 - Dependencia de proxies públicos (pueden fallar).
 - Adblockers pueden bloquear Umami.
 - BibleGateway puede cambiar HTML (parseHTML depende de estructura).
-

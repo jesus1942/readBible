@@ -8,7 +8,7 @@
     <link rel="icon" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180" />
     <title>Lectura Viva</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=2" />
   </head>
   <body>
     <!-- SVG filter for hand-drawn button edges (scale reducido a 0.8 para que sea sutil) -->
@@ -84,6 +84,7 @@
             <button id="bookmarkBtn" class="bookmark-btn" type="button" aria-label="Guardar marcador" hidden>🔖</button>
             <button id="studyDot" class="study-dot" type="button" aria-label="Abrir estudio" hidden></button>
           </p>
+          <button id="resultDevotionalBtn" class="ghost" type="button" hidden>Hacer devocional de este pasaje</button>
         </div>
       </section>
 
@@ -354,6 +355,7 @@
           <button class="community-tab" data-tab="eventos" type="button">Eventos</button>
           <button class="community-tab" data-tab="celulas" type="button">Celulas</button>
           <button class="community-tab role-hidden" id="communityTabMiembros" data-tab="miembros" type="button">Miembros</button>
+          <button class="community-tab role-hidden" id="communityTabAdmin" data-tab="admin" type="button">Gestion</button>
           <button class="community-tab role-hidden" id="communityTabModeracion" data-tab="moderacion" type="button">Moderacion</button>
         </div>
 
@@ -447,6 +449,12 @@
           <input id="communityEventTitle" type="text" placeholder="Ej: Reunion de jovenes" />
           <label for="communityEventStartsAt">Fecha y hora</label>
           <input id="communityEventStartsAt" type="datetime-local" />
+          <label for="communityEventRecurrence">Repeticion</label>
+          <select id="communityEventRecurrence">
+            <option value="none">No se repite</option>
+            <option value="weekly">Semanal, 12 encuentros</option>
+            <option value="monthly">Mensual, 12 encuentros</option>
+          </select>
           <button id="communityCreateEvent" class="ghost" type="button">Crear evento</button>
         </div>
 
@@ -456,6 +464,23 @@
             <button id="communityRefreshCells" class="ghost" type="button">Actualizar</button>
           </div>
           <div id="communityCellsList" class="community-list"></div>
+        </div>
+
+        <div id="communityMaterialsSection" class="community-section" data-community-tab="celulas" hidden>
+          <div class="community-section-head">
+            <p id="communityMaterialsTitle" class="eyebrow">Materiales</p>
+            <button id="communityCloseMaterials" class="ghost" type="button">Cerrar</button>
+          </div>
+          <div id="communityMaterialsList" class="community-list"></div>
+          <div id="communityMaterialForm" class="material-form role-hidden">
+            <label for="communityMaterialTitle">Titulo</label>
+            <input id="communityMaterialTitle" type="text" placeholder="Ej: Guia sobre Juan 15" />
+            <label for="communityMaterialReference">Pasaje biblico</label>
+            <input id="communityMaterialReference" type="text" placeholder="Ej: Juan 15:1-8" />
+            <label for="communityMaterialBody">Contenido</label>
+            <textarea id="communityMaterialBody" rows="5" placeholder="Escribe la guia de estudio..."></textarea>
+            <button id="communityCreateMaterial" class="ghost" type="button">Guardar material</button>
+          </div>
         </div>
 
         <div id="communityCreateCellForm" class="community-section role-hidden" data-community-tab="celulas">
@@ -487,6 +512,15 @@
           </div>
           <p id="communityMiembrosHint" class="community-note">Guarda tu ubicacion en el perfil para ver distancias.</p>
           <div id="communityMiembrosList" class="community-list"></div>
+        </div>
+
+        <div id="communityAdminDashboard" class="community-section role-hidden" data-community-tab="admin">
+          <div class="community-section-head">
+            <p class="eyebrow">Gestion de iglesia</p>
+            <button id="communityRefreshAdmin" class="ghost" type="button">Actualizar</button>
+          </div>
+          <div id="communityAdminMetrics" class="admin-metrics"></div>
+          <p class="community-note">La gestion de roles y estados se realiza desde la pestana Miembros.</p>
         </div>
       </div>
     </div>
@@ -581,6 +615,8 @@
         <div id="devotionalCalendar" class="devotional-calendar"></div>
         <div class="community-section">
           <p id="devotionalDateLabel" class="eyebrow"></p>
+          <label for="devotionalTitle">Titulo</label>
+          <input id="devotionalTitle" type="text" placeholder="Ej: Permanecer en la vid" />
           <label for="devotionalPassage">Lectura</label>
           <input id="devotionalPassage" type="text" placeholder="Juan 15:1-8" />
           <button id="devotionalUseDaily" class="ghost" type="button">Usar el versiculo del dia</button>
@@ -590,7 +626,18 @@
           <textarea id="devotionalApplication" rows="3" placeholder="Un paso concreto para mi dia..."></textarea>
           <label for="devotionalPrayer">Mi oracion</label>
           <textarea id="devotionalPrayer" rows="3" placeholder="Mi respuesta a Dios..."></textarea>
+          <label for="devotionalMood">Como me siento</label>
+          <select id="devotionalMood">
+            <option value="">Sin elegir</option>
+            <option value="agradecido">Agradecido</option>
+            <option value="en_paz">En paz</option>
+            <option value="esperanzado">Esperanzado</option>
+            <option value="preocupado">Preocupado</option>
+            <option value="triste">Triste</option>
+          </select>
+          <label class="toggle-row"><input id="devotionalPrivate" type="checkbox" checked /> Privado, solo visible para mi</label>
           <button id="devotionalSave" type="button">Guardar devocional</button>
+          <button id="devotionalDelete" class="ghost" type="button">Borrar este devocional</button>
           <p id="devotionalStatus" class="community-note"></p>
         </div>
       </div>
@@ -649,8 +696,8 @@
     ></script>
     <script src="core.js?v=2"></script>
     <script src="net.js?v=2"></script>
-    <script src="auth.js?v=1"></script>
-    <script src="app.js?v=91"></script>
+    <script src="auth.js?v=2"></script>
+    <script src="app.js?v=92"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;

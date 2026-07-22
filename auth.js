@@ -86,6 +86,33 @@
     return iOS && standalone;
   }
 
+  function getNativePlatform() {
+    try {
+      const capacitor = global.Capacitor;
+      if (!capacitor || typeof capacitor.getPlatform !== "function") return "web";
+      return capacitor.getPlatform() || "web";
+    } catch {
+      return "web";
+    }
+  }
+
+  function selectGoogleClientId(config) {
+    const platform = getNativePlatform();
+    if (platform === "android") return config.googleAndroidClientId || "";
+    if (platform === "ios") return config.googleIosClientId || "";
+    return config.googleClientId || "";
+  }
+
+  async function requestNativeGoogleCredential(clientId) {
+    const adapter = global.ReadBibleNativeAuth;
+    if (!adapter || typeof adapter.getGoogleCredential !== "function") {
+      const error = new Error("El acceso nativo esta preparado pero falta instalar el adaptador de Google.");
+      error.code = "NATIVE_AUTH_ADAPTER_MISSING";
+      throw error;
+    }
+    return adapter.getGoogleCredential({ clientId, platform: getNativePlatform() });
+  }
+
   function buildDevCredential() {
     const payload = {
       sub: readStorage("devUserSub") || "dev-1",
@@ -200,6 +227,19 @@
     const idToken = params.get("id_token");
     if (!idToken) return null;
     history.replaceState(null, "", location.pathname + location.search);
+    try {
+      const payloadPart = idToken.split(".")[1] || "";
+      const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+      const bytes = Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+      const payload = JSON.parse(new TextDecoder().decode(bytes));
+      const expectedNonce = readStorage("authNonce");
+      writeStorage("authNonce", "");
+      if (!expectedNonce || payload.nonce !== expectedNonce) return null;
+    } catch {
+      writeStorage("authNonce", "");
+      return null;
+    }
     return idToken;
   }
 
@@ -213,6 +253,9 @@
     authFetch,
     isLocalhost,
     isStandaloneIos,
+    getNativePlatform,
+    selectGoogleClientId,
+    requestNativeGoogleCredential,
     buildDevCredential,
     readLegacyIdentity,
     loginWithCredential,

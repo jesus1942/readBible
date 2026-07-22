@@ -12,6 +12,21 @@ y App Store. No se reescribio nada.
 - `android/` — proyecto nativo de Android (se abre con Android Studio).
 - `ios/` — proyecto nativo de iOS (se abre con Xcode, requiere Mac).
 - Scripts en `package.json`: `build:www`, `sync`, `open:android`, `open:ios`.
+- `auth.js` se incluye en `www/` y la prueba `tests/mobile-build.test.js`
+  evita que vuelva a quedar afuera.
+
+## Login movil
+
+El backend ya acepta audiencias distintas para web, Android e iOS y `/auth/config`
+entrega el Client ID correspondiente a cada plataforma. `auth.js` detecta
+Capacitor y llama a `window.ReadBibleNativeAuth.getGoogleCredential(...)`.
+
+Antes de publicar el login nativo faltan dos pasos que requieren credenciales:
+
+1. Crear y cargar `GOOGLE_CLIENT_ID_ANDROID` y `GOOGLE_CLIENT_ID_IOS`.
+2. Instalar un plugin de Google Sign-In para Capacitor y registrar un adaptador
+   `ReadBibleNativeAuth` que devuelva el ID token. Sin ese adaptador, la app
+   muestra un mensaje controlado y no expone ninguna clave.
 
 La carpeta `www/` y las copias dentro de los proyectos nativos NO se versionan:
 se regeneran con `npm run sync`.

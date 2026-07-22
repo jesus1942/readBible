@@ -17,6 +17,3 @@ test-results/
 www/
 android/app/src/main/assets/public/
 android/app/src/main/assets/capacitor.config.json
-package-lock.json
-playwright.config.mjs
-tests/
