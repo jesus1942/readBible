@@ -2,9 +2,11 @@
   --bg: #f4f0e6;
   --card: #ffffff;
   --accent: #f39c12;
+  --gold: #b98224;
   --text: #1c1a16;
   --muted: #5f5a50;
   --shadow: rgba(20, 15, 10, 0.12);
+  --serif: "Cormorant Garamond", "Times New Roman", serif;
 }
 
 * {
@@ -2588,5 +2590,563 @@ button:active {
   }
   .actions {
     flex-direction: column;
+  }
+}
+
+/* ==========================================================================
+   MOBILE-FIRST FOUNDATION
+   Las reglas base corresponden a telefonos. Las ampliaciones para tablet y
+   escritorio viven unicamente en los media queries min-width del final.
+   ========================================================================== */
+
+html {
+  min-width: 0;
+  min-height: 100%;
+  overflow-x: hidden;
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-width: 0;
+  min-height: 100%;
+  overflow-x: hidden;
+  font-family: var(--serif);
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 250, 241, 0.96), transparent 38%),
+    linear-gradient(160deg, #f7f2e8 0%, #f0e6d6 55%, #e9e1d2 100%);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+  min-width: 0;
+  font-family: inherit;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+}
+
+button,
+a,
+input,
+select,
+textarea,
+summary {
+  touch-action: manipulation;
+}
+
+button {
+  min-height: 44px;
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.btn-close,
+.menu-btn,
+.bookmark-btn,
+.study-dot,
+.hl-swatch,
+.devcal-day {
+  min-height: 0;
+}
+
+.app {
+  width: 100%;
+  max-width: 100%;
+  gap: 12px;
+  padding:
+    max(12px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right))
+    max(28px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+}
+
+.hero {
+  min-width: 0;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 16px;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.hero > div {
+  min-width: 0;
+}
+
+h1 {
+  font-size: clamp(24px, 7.6vw, 30px);
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+.subtitle {
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.eyebrow {
+  letter-spacing: 0.22em;
+}
+
+.card {
+  min-width: 0;
+  padding: 16px;
+  border-radius: 18px;
+  box-shadow: 0 2px 0 rgba(255, 255, 255, 0.65) inset, 0 5px 16px rgba(60, 35, 10, 0.09);
+}
+
+.field {
+  min-width: 0;
+}
+
+.actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.actions button {
+  width: 100%;
+  padding-inline: 10px;
+}
+
+.output .verse {
+  font-size: clamp(21px, 6.2vw, 25px);
+  line-height: 1.55;
+}
+
+#resultDevotionalBtn,
+.daily-home-card > button,
+.continue-card > button {
+  width: 100%;
+}
+
+.home-greeting {
+  min-width: 0;
+  align-items: flex-start;
+}
+
+.home-hello {
+  min-width: 0;
+  font-size: clamp(22px, 6.5vw, 26px);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.home-cards {
+  gap: 12px;
+}
+
+.home-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.home-action-btn {
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 8px;
+  font-size: 14px;
+}
+
+/* La navegacion tiene cuatro destinos: cada uno conserva su propia columna. */
+.footer-nav {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 6px;
+}
+
+.footer-nav-btn {
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px 3px 8px;
+  font-size: 10px;
+  letter-spacing: 0.035em;
+}
+
+.footer-bottom {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px max(14px, env(safe-area-inset-bottom));
+}
+
+.footer-credit {
+  text-align: center;
+}
+
+.footer-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 100%;
+}
+
+.footer-actions a,
+.footer-actions button {
+  width: 100%;
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+/* Drawer movil: vuelve a sentirse como menu lateral y no como otra pagina. */
+.side-menu-panel {
+  width: min(88vw, 360px);
+  max-width: 360px;
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(14px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom))
+    14px;
+  gap: 12px;
+}
+
+.side-menu-about {
+  padding: 12px;
+}
+
+.theme-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* Sheets y paneles: hoja inferior en telefono, modal centrado en pantallas amplias. */
+.sheet-overlay,
+.sheet-overlay.center,
+.help-overlay,
+.developer-overlay {
+  align-items: end;
+  place-items: end center;
+  padding: max(8px, env(safe-area-inset-top)) 0 0;
+}
+
+.sheet-card,
+.community-sheet,
+.help-card,
+.developer-overlay > .sheet-card {
+  width: 100%;
+  max-width: 100%;
+  max-height: calc(100dvh - max(8px, env(safe-area-inset-top)));
+  gap: 10px;
+  padding:
+    16px
+    max(14px, env(safe-area-inset-right))
+    max(18px, env(safe-area-inset-bottom))
+    max(14px, env(safe-area-inset-left));
+  border-radius: 22px 22px 0 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.help-card-tabs {
+  max-height: calc(100dvh - max(8px, env(safe-area-inset-top)));
+}
+
+.help-tabs {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+.help-tabs::-webkit-scrollbar,
+.community-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.help-tab {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding-inline: 12px;
+}
+
+.community-tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+  border-radius: 14px;
+}
+
+.community-tab {
+  flex: 0 0 auto;
+  min-width: auto;
+  min-height: 40px;
+  font-size: 10px;
+  padding: 7px 11px;
+}
+
+.community-section {
+  min-width: 0;
+  padding: 12px;
+}
+
+.community-section-head {
+  min-width: 0;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.community-section-head .eyebrow {
+  flex: 1 1 150px;
+}
+
+.community-section-head button {
+  flex: 0 1 auto;
+}
+
+.community-card,
+.study-cell-card,
+.study-material-card,
+.member-card,
+.dev-church-item {
+  min-width: 0;
+}
+
+.community-card-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.community-card-actions > *,
+.community-nearby-actions > * {
+  width: 100%;
+}
+
+.community-nearby-actions,
+.member-admin-controls,
+.sa-field-row,
+.dev-role-switcher {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.member-admin-controls {
+  grid-column: 1 / -1;
+}
+
+.admin-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.community-map-frame {
+  min-height: 220px;
+}
+
+.member-name,
+.member-address {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.member-dist {
+  white-space: normal;
+  text-align: center;
+}
+
+.picker-overlay {
+  padding: max(8px, env(safe-area-inset-top)) 0 0;
+}
+
+.picker-panel {
+  width: 100%;
+  max-width: 100%;
+  padding: 9px max(12px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  border-radius: 24px 24px 0 0;
+}
+
+.picker-body {
+  height: min(220px, 34dvh);
+}
+
+.picker-testament {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+}
+
+.welcome-gate {
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(14px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom))
+    max(14px, env(safe-area-inset-left));
+}
+
+.welcome-card {
+  max-height: 100%;
+  padding: 24px 18px;
+  overflow-y: auto;
+}
+
+.daily,
+.zen,
+.proj-overlay {
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+
+.daily-card {
+  width: 100%;
+  padding: 30px 18px 22px;
+}
+
+.zen-controls {
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+}
+
+.proj-overlay {
+  padding-top: max(64px, env(safe-area-inset-top));
+  padding-bottom: max(86px, env(safe-area-inset-bottom));
+}
+
+.proj-controls {
+  bottom: max(28px, env(safe-area-inset-bottom));
+}
+
+.proj-hint {
+  display: none;
+}
+
+@media (max-width: 359px) {
+  .actions,
+  .home-actions,
+  .admin-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .actions button:first-child {
+    grid-column: auto;
+  }
+
+  .footer-nav-btn {
+    font-size: 9px;
+  }
+
+  .member-card {
+    flex-wrap: wrap;
+  }
+}
+
+@media (min-width: 560px) {
+  .app {
+    gap: 16px;
+    padding: 20px 18px 40px;
+  }
+
+  .hero,
+  .card {
+    padding: 20px;
+  }
+
+  .community-card-actions,
+  .community-nearby-actions,
+  .dev-role-switcher {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sa-field-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .member-admin-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+}
+
+@media (min-width: 720px) {
+  .app {
+    max-width: 920px;
+    gap: 18px;
+    padding: 28px 24px 60px;
+  }
+
+  h1 {
+    font-size: 32px;
+  }
+
+  .hero {
+    align-items: center;
+  }
+
+  .sheet-overlay,
+  .sheet-overlay.center,
+  .help-overlay,
+  .developer-overlay {
+    align-items: center;
+    place-items: center;
+    padding: 24px;
+  }
+
+  .sheet-card,
+  .help-card,
+  .developer-overlay > .sheet-card {
+    width: min(540px, 100%);
+    max-width: 540px;
+    max-height: min(88vh, 820px);
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .community-sheet {
+    width: min(660px, 100%);
+    max-width: 660px;
+  }
+
+  .picker-overlay {
+    padding: 18px;
+  }
+
+  .picker-panel {
+    width: min(560px, 100%);
+    padding: 10px 18px 16px;
+    border-radius: 28px 28px 18px 18px;
+  }
+
+  .footer-bottom {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .footer-credit {
+    text-align: left;
+  }
+
+  .footer-actions {
+    display: flex;
+    width: auto;
+  }
+
+  .footer-actions a,
+  .footer-actions button {
+    width: auto;
+  }
+
+  .community-map-frame {
+    min-height: 320px;
+  }
+
+  .proj-hint {
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
