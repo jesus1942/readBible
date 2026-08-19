@@ -1,16 +1,20 @@
-const CACHE_NAME = "bibleapp-pwa-v117";
+const CACHE_NAME = "bibleapp-pwa-v118";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css?v=3",
-  "./core.js?v=3",
-  "./apocrypha.js?v=1",
+  "./core.js?v=4",
+  "./apocrypha.js?v=2",
   "./net.js?v=2",
   "./auth.js?v=2",
   "./app.js?v=92",
   "./daily_verses.json",
   "./efemerides.json",
   "./manifest.json",
+  "./data/enoch-es-01-36.tsv?v=1",
+  "./data/enoch-es-37-71.tsv?v=1",
+  "./data/enoch-es-72-90.tsv?v=1",
+  "./data/enoch-es-91-108.tsv?v=1",
   "./icons/apple-touch-icon.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png"
@@ -41,12 +45,15 @@ self.addEventListener("fetch", (event) => {
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin) return;
 
-  // index.html aun solicita core.js?v=2. Al activar esta version, servimos la
-  // revision v3 desde el cache para cargar la extension sin tocar el HTML.
+  // index.html conserva una URL historica de core.js. Redirigimos la peticion
+  // al artefacto versionado actual para que la extension de libros antiguos
+  // no dependa de que el HTML cambie al mismo tiempo que el service worker.
   if (requestUrl.pathname.endsWith("/core.js")) {
-    const currentCore = new URL("./core.js?v=3", self.location.href).href;
+    const currentCore = new URL("./core.js?v=4", self.location.href).toString();
     event.respondWith(
-      caches.match(currentCore).then((cached) => cached || fetch(event.request))
+      caches.match(currentCore).then((cached) =>
+        cached || fetch(currentCore).catch(() => cached)
+      )
     );
     return;
   }
