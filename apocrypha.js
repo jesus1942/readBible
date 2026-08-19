@@ -22,11 +22,23 @@
     "2 Macabeos": 15,
     "1 Enoc": 108
   };
-  const ENOCH_VERSION = "ENOC-RHC-1917";
-  const ENOCH_SOURCE_LABEL = "R.H. Charles 1917 · inglés";
+
+  const ENOCH_ES_VERSION = "ENOC-RB-ES-1";
+  const ENOCH_EN_VERSION = "ENOC-RHC-1917";
+  const ENOCH_VERSION = ENOCH_ES_VERSION;
+  const ENOCH_ES_LABEL = "ReadBible · español";
+  const ENOCH_EN_LABEL = "R.H. Charles 1917 · inglés";
+  const ENOCH_ES_FILES = [
+    { from: 1, to: 36, path: "data/enoch-es-01-36.tsv", url: "data/enoch-es-01-36.tsv?v=1" },
+    { from: 37, to: 71, path: "data/enoch-es-37-71.tsv", url: "data/enoch-es-37-71.tsv?v=1" },
+    { from: 72, to: 90, path: "data/enoch-es-72-90.tsv", url: "data/enoch-es-72-90.tsv?v=1" },
+    { from: 91, to: 108, path: "data/enoch-es-91-108.tsv", url: "data/enoch-es-91-108.tsv?v=1" }
+  ];
   const DEUTEROCANONICAL_FALLBACK_VERSION = "DHH";
   const DEUTEROCANONICAL_VERSIONS = new Set(["DHH", "TLA"]);
-  const enochChapterCache = new Map();
+  const enochSpanishChapterCache = new Map();
+  const enochEnglishChapterCache = new Map();
+  const enochSpanishFileCache = new Map();
 
   function normalizeKey(value) {
     return String(value || "")
@@ -114,6 +126,27 @@
     return verses;
   }
 
+  function parseEnochTsv(text) {
+    const chapters = {};
+    String(text || "").split(/\r?\n/).forEach((rawLine) => {
+      const line = rawLine.trimEnd();
+      if (!line || line.trimStart().startsWith("#")) return;
+      const tab = line.indexOf("\t");
+      if (tab <= 0) return;
+      const ref = line.slice(0, tab).trim();
+      const body = line.slice(tab + 1).trim();
+      const match = ref.match(/^(\d{1,3}):(\d{1,3})$/);
+      if (!match || !body) return;
+      const chapter = Number(match[1]);
+      const verse = Number(match[2]);
+      if (!Number.isInteger(chapter) || chapter < 1 || chapter > 108) return;
+      if (!Number.isInteger(verse) || verse < 1) return;
+      if (!chapters[chapter]) chapters[chapter] = {};
+      chapters[chapter][verse] = body;
+    });
+    return chapters;
+  }
+
   function selectVerseRange(verses, verseStart, verseEnd) {
     const start = Number(verseStart);
     const end = Number(verseEnd);
@@ -132,12 +165,20 @@
     return numbers.length ? Math.max(...numbers) : 0;
   }
 
+  function spanishFileForChapter(chapter) {
+    const value = Number(chapter);
+    return ENOCH_ES_FILES.find((file) => value >= file.from && value <= file.to) || null;
+  }
+
   const api = {
     DEUTEROCANONICAL_BOOKS,
     OTHER_ANCIENT_BOOKS,
     ANCIENT_BOOKS,
     ANCIENT_BOOK_CHAPTERS,
     ENOCH_VERSION,
+    ENOCH_ES_VERSION,
+    ENOCH_EN_VERSION,
+    ENOCH_ES_FILES,
     normalizeKey,
     canonicalBookName,
     isEnochBook,
@@ -145,8 +186,10 @@
     isAncientBook,
     chapterPageTitle,
     extractVerseMapFromText,
+    parseEnochTsv,
     selectVerseRange,
-    verseCountFromMap
+    verseCountFromMap,
+    spanishFileForChapter
   };
 
   global.ReadBibleApocrypha = api;
@@ -155,6 +198,34 @@
   }
 
   if (typeof document === "undefined" || typeof window === "undefined") return;
+
+  function readEnochLanguage() {
+    try {
+      return localStorage.getItem("enochLanguage") === "en" ? "en" : "es";
+    } catch {
+      return "es";
+    }
+  }
+
+  let enochLanguage = readEnochLanguage();
+
+  function setEnochLanguage(language) {
+    enochLanguage = language === "en" ? "en" : "es";
+    try {
+      localStorage.setItem("enochLanguage", enochLanguage);
+    } catch {
+      // ignore storage errors
+    }
+    refreshEnochLanguageToggle();
+  }
+
+  function enochVersionForLanguage(language) {
+    return language === "en" ? ENOCH_EN_VERSION : ENOCH_ES_VERSION;
+  }
+
+  function enochLabelForLanguage(language) {
+    return language === "en" ? ENOCH_EN_LABEL : ENOCH_ES_LABEL;
+  }
 
   function normalizedBookIndex(book) {
     const key = normalizeKey(book);
@@ -186,6 +257,48 @@
     return note;
   }
 
+  function enochLanguageToggleElement() {
+    let button = document.getElementById("enochLanguageToggle");
+    if (button) return button;
+    button = document.createElement("button");
+    button.id = "enochLanguageToggle";
+    button.className = "ghost";
+    button.type = "button";
+    button.style.marginTop = "8px";
+    button.style.width = "100%";
+    button.hidden = true;
+    const note = sourceNoteElement();
+    if (note.parentNode) note.insertAdjacentElement("afterend", button);
+    button.addEventListener("click", async () => {
+      const parsed = parseReference(queryInput.value);
+      if (!parsed || !isEnochBook(parsed.book)) return;
+      setEnochLanguage(enochLanguage === "es" ? "en" : "es");
+      if (currentResultMode === "chapter") {
+        await fetchEnochFullChapter(parsed);
+      } else {
+        await fetchEnochVerse(parsed);
+      }
+    });
+    return button;
+  }
+
+  function refreshEnochLanguageToggle() {
+    const button = document.getElementById("enochLanguageToggle");
+    if (!button) return;
+    button.textContent = enochLanguage === "es" ? "Ver original en inglés" : "Ver traducción en español";
+  }
+
+  function showEnochLanguageToggle() {
+    const button = enochLanguageToggleElement();
+    refreshEnochLanguageToggle();
+    button.hidden = false;
+  }
+
+  function hideEnochLanguageToggle() {
+    const button = document.getElementById("enochLanguageToggle");
+    if (button) button.hidden = true;
+  }
+
   function showSourceNote(text) {
     const note = sourceNoteElement();
     note.textContent = text;
@@ -195,6 +308,18 @@
   function hideSourceNote() {
     const note = document.getElementById("ancientSourceNote");
     if (note) note.hidden = true;
+    hideEnochLanguageToggle();
+  }
+
+  function showEnochSourceNote(language, fallbackToEnglish = false) {
+    if (language === "es") {
+      showSourceNote("1 Enoc · Traducción propia de ReadBible al español basada en R.H. Charles (1917), texto fuente de dominio público. Canon etíope; apócrifo/pseudoepígrafo en otras tradiciones.");
+    } else if (fallbackToEnglish) {
+      showSourceNote("No se pudo cargar la traducción local en español. Mostrando el original inglés de R.H. Charles (1917), de dominio público, desde Wikisource.");
+    } else {
+      showSourceNote("1 Enoc · Original inglés de R.H. Charles (1917), texto de dominio público. Canon etíope; apócrifo/pseudoepígrafo en otras tradiciones. Fuente: Wikisource.");
+    }
+    showEnochLanguageToggle();
   }
 
   function enochApiUrl(chapter) {
@@ -217,29 +342,77 @@
     return extractVerseMapFromText(root.textContent || "");
   }
 
-  async function fetchEnochChapterMap(chapter) {
+  async function fetchEnochSpanishChapterMap(chapter) {
     const value = Number(chapter);
     chapterPageTitle(value);
-    if (enochChapterCache.has(value)) return enochChapterCache.get(value);
+    if (enochSpanishChapterCache.has(value)) return enochSpanishChapterCache.get(value);
+    const file = spanishFileForChapter(value);
+    if (!file) throw new Error("No se encontró el paquete español de este capítulo.");
+
+    let chapters = enochSpanishFileCache.get(file.path);
+    if (!chapters) {
+      const response = await fetch(file.url, { cache: "force-cache" });
+      if (!response.ok) throw new Error("No se pudo cargar la traducción local de 1 Enoc.");
+      chapters = parseEnochTsv(await response.text());
+      enochSpanishFileCache.set(file.path, chapters);
+    }
+    const verses = chapters[value] || {};
+    if (!verseCountFromMap(verses)) throw new Error("La traducción local no contiene este capítulo.");
+    enochSpanishChapterCache.set(value, verses);
+    return verses;
+  }
+
+  async function fetchEnochEnglishChapterMap(chapter) {
+    const value = Number(chapter);
+    chapterPageTitle(value);
+    if (enochEnglishChapterCache.has(value)) return enochEnglishChapterCache.get(value);
 
     const response = await fetch(enochApiUrl(value), { headers: { Accept: "application/json" } });
-    if (!response.ok) throw new Error("No se pudo leer 1 Enoc desde Wikisource.");
+    if (!response.ok) throw new Error("No se pudo leer el original de 1 Enoc desde Wikisource.");
     const payload = await response.json();
     const html = payload && payload.parse && payload.parse.text ? payload.parse.text["*"] : "";
     if (!html) throw new Error("Wikisource no devolvió el capítulo solicitado.");
     const verses = verseMapFromWikisourceHtml(html);
-    if (!verseCountFromMap(verses)) throw new Error("No se pudieron identificar los versículos de 1 Enoc.");
-    enochChapterCache.set(value, verses);
+    if (!verseCountFromMap(verses)) throw new Error("No se pudieron identificar los versículos del original de 1 Enoc.");
+    enochEnglishChapterCache.set(value, verses);
     return verses;
   }
 
-  function buildEnochReference(parsed, chapterOnly) {
+  async function loadEnochChapter(chapter, preferredLanguage = enochLanguage) {
+    if (preferredLanguage === "en") {
+      return { verses: await fetchEnochEnglishChapterMap(chapter), language: "en", fallback: false };
+    }
+    try {
+      return { verses: await fetchEnochSpanishChapterMap(chapter), language: "es", fallback: false };
+    } catch (spanishError) {
+      try {
+        return { verses: await fetchEnochEnglishChapterMap(chapter), language: "en", fallback: true };
+      } catch {
+        throw spanishError;
+      }
+    }
+  }
+
+  function buildEnochReference(parsed, chapterOnly, language) {
     const book = "1 Enoc";
-    if (chapterOnly) return `${book} ${parsed.chapter} (${ENOCH_SOURCE_LABEL})`;
+    const label = enochLabelForLanguage(language);
+    if (chapterOnly) return `${book} ${parsed.chapter} (${label})`;
     const versePart = parsed.verseEnd > parsed.verseStart
       ? `${parsed.verseStart}-${parsed.verseEnd}`
       : `${parsed.verseStart}`;
-    return `${book} ${parsed.chapter}:${versePart} (${ENOCH_SOURCE_LABEL})`;
+    return `${book} ${parsed.chapter}:${versePart} (${label})`;
+  }
+
+  function setCurrentEnochContext(parsed, mode, language) {
+    const version = enochVersionForLanguage(language);
+    currentStudyParsed = parsed;
+    currentStudyVersion = version;
+    currentResultMode = mode;
+    currentResultVersion = version;
+    currentResultKey = mode === "chapter"
+      ? buildChapterCacheKey(parsed, version)
+      : buildCacheKey(parsed, version);
+    return version;
   }
 
   async function fetchEnochVerse(parsed) {
@@ -251,29 +424,40 @@
     }
 
     queryInput.value = buildReferenceInput("1 Enoc", canonical.chapter, canonical.verseStart, canonical.verseEnd);
-    currentStudyParsed = canonical;
-    currentStudyVersion = ENOCH_VERSION;
-    currentResultMode = "verse";
-    currentResultVersion = ENOCH_VERSION;
-    currentResultKey = buildCacheKey(canonical, ENOCH_VERSION);
-    trackEvent("search_ancient_verse", { book: "1 Enoc", chapter: canonical.chapter });
+    const preferredLanguage = enochLanguage;
+    const preferredVersion = setCurrentEnochContext(canonical, "verse", preferredLanguage);
+    trackEvent("search_ancient_verse", { book: "1 Enoc", chapter: canonical.chapter, language: preferredLanguage });
 
-    const cached = readCache(currentResultKey);
+    const preferredKey = buildCacheKey(canonical, preferredVersion);
+    const cached = readCache(preferredKey);
     if (cached) {
+      currentResultKey = preferredKey;
       showResult(cached.text, cached.reference);
-      showSourceNote("1 Enoc · R.H. Charles (1917), texto en inglés. Canon etíope; apócrifo/pseudoepígrafo en otras tradiciones. Fuente: Wikisource.");
+      showEnochSourceNote(preferredLanguage, false);
       return true;
     }
 
-    showStatus("Buscando 1 Enoc...", false);
+    showStatus(preferredLanguage === "es" ? "Abriendo 1 Enoc en español..." : "Buscando el original de 1 Enoc...", false);
     try {
-      const verses = await fetchEnochChapterMap(canonical.chapter);
-      const text = selectVerseRange(verses, canonical.verseStart, canonical.verseEnd);
-      if (!text) return false;
-      const reference = buildEnochReference(canonical, false);
-      writeCache(currentResultKey, { text, reference });
+      const loaded = await loadEnochChapter(canonical.chapter, preferredLanguage);
+      const text = selectVerseRange(loaded.verses, canonical.verseStart, canonical.verseEnd);
+      if (!text) {
+        showStatus("No existe ese versículo en 1 Enoc.", true);
+        return false;
+      }
+      const actualVersion = setCurrentEnochContext(canonical, "verse", loaded.language);
+      const cacheKey = buildCacheKey(canonical, actualVersion);
+      const actualCached = readCache(cacheKey);
+      if (actualCached) {
+        currentResultKey = cacheKey;
+        showResult(actualCached.text, actualCached.reference);
+        showEnochSourceNote(loaded.language, loaded.fallback);
+        return true;
+      }
+      const reference = buildEnochReference(canonical, false, loaded.language);
+      writeCache(cacheKey, { text, reference });
       showResult(text, reference);
-      showSourceNote("1 Enoc · R.H. Charles (1917), texto en inglés. Canon etíope; apócrifo/pseudoepígrafo en otras tradiciones. Fuente: Wikisource.");
+      showEnochSourceNote(loaded.language, loaded.fallback);
       return true;
     } catch (error) {
       showStatus(error && error.message ? error.message : "No se pudo obtener 1 Enoc.", true);
@@ -290,34 +474,41 @@
     }
 
     queryInput.value = buildReferenceInput("1 Enoc", canonical.chapter, canonical.verseStart, canonical.verseEnd);
-    currentStudyParsed = canonical;
-    currentStudyVersion = ENOCH_VERSION;
-    currentResultMode = "chapter";
-    currentResultVersion = ENOCH_VERSION;
-    currentResultKey = buildChapterCacheKey(canonical, ENOCH_VERSION);
-    trackEvent("search_ancient_chapter", { book: "1 Enoc", chapter: canonical.chapter });
+    const preferredLanguage = enochLanguage;
+    const preferredVersion = setCurrentEnochContext(canonical, "chapter", preferredLanguage);
+    trackEvent("search_ancient_chapter", { book: "1 Enoc", chapter: canonical.chapter, language: preferredLanguage });
 
-    const cached = readCache(currentResultKey);
+    const preferredKey = buildChapterCacheKey(canonical, preferredVersion);
+    const cached = readCache(preferredKey);
     if (cached) {
+      currentResultKey = preferredKey;
       showResult(cached.text, cached.reference);
-      showSourceNote("1 Enoc · R.H. Charles (1917), texto en inglés. Canon etíope; apócrifo/pseudoepígrafo en otras tradiciones. Fuente: Wikisource.");
+      showEnochSourceNote(preferredLanguage, false);
       return true;
     }
 
-    showStatus("Buscando capítulo de 1 Enoc...", false);
+    showStatus(preferredLanguage === "es" ? "Abriendo capítulo de 1 Enoc en español..." : "Buscando capítulo original de 1 Enoc...", false);
     try {
-      const verses = await fetchEnochChapterMap(canonical.chapter);
-      const count = verseCountFromMap(verses);
-      const parts = [];
-      for (let verse = 1; verse <= count; verse += 1) {
-        if (verses[verse]) parts.push(`${verse}. ${verses[verse]}`);
+      const loaded = await loadEnochChapter(canonical.chapter, preferredLanguage);
+      const verseNumbers = Object.keys(loaded.verses).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+      const text = verseNumbers.map((verse) => `${verse}. ${loaded.verses[verse]}`).join(" ").trim();
+      if (!text) {
+        showStatus("No se pudo leer ese capítulo de 1 Enoc.", true);
+        return false;
       }
-      const text = parts.join(" ").trim();
-      if (!text) return false;
-      const reference = buildEnochReference(canonical, true);
-      writeCache(currentResultKey, { text, reference });
+      const actualVersion = setCurrentEnochContext(canonical, "chapter", loaded.language);
+      const cacheKey = buildChapterCacheKey(canonical, actualVersion);
+      const actualCached = readCache(cacheKey);
+      if (actualCached) {
+        currentResultKey = cacheKey;
+        showResult(actualCached.text, actualCached.reference);
+        showEnochSourceNote(loaded.language, loaded.fallback);
+        return true;
+      }
+      const reference = buildEnochReference(canonical, true, loaded.language);
+      writeCache(cacheKey, { text, reference });
       showResult(text, reference);
-      showSourceNote("1 Enoc · R.H. Charles (1917), texto en inglés. Canon etíope; apócrifo/pseudoepígrafo en otras tradiciones. Fuente: Wikisource.");
+      showEnochSourceNote(loaded.language, loaded.fallback);
       return true;
     } catch (error) {
       showStatus(error && error.message ? error.message : "No se pudo obtener 1 Enoc.", true);
@@ -341,6 +532,7 @@
   }
 
   function showDeuterocanonicalNote(versionInfo) {
+    hideEnochLanguageToggle();
     if (versionInfo.changed) {
       showSourceNote(`Libro deuterocanónico · no disponible en ${versionInfo.selected}; mostrando ${versionInfo.effective} desde BibleGateway.`);
       return;
@@ -384,10 +576,15 @@
   fetchVerseCount = async function fetchVerseCountWithAncientBooks(book, chapter, version) {
     if (isEnochBook(book)) {
       try {
-        const verses = await fetchEnochChapterMap(chapter);
+        const verses = await fetchEnochSpanishChapterMap(chapter);
         return verseCountFromMap(verses) || null;
       } catch {
-        return null;
+        try {
+          const verses = await fetchEnochEnglishChapterMap(chapter);
+          return verseCountFromMap(verses) || null;
+        } catch {
+          return null;
+        }
       }
     }
     if (isDeuterocanonicalBook(book)) {
@@ -492,6 +689,26 @@
     ancientButtons.forEach((button) => notesList.appendChild(button));
   };
 
+  const baseOpenBookmark = openBookmark;
+  openBookmark = function openBookmarkWithEnochLanguage(id) {
+    const bookmark = readBookmarks().find((item) => item.id === id);
+    if (bookmark && isEnochBook((parseReference(bookmark.query) || {}).book)) {
+      if (bookmark.version === ENOCH_EN_VERSION) setEnochLanguage("en");
+      if (bookmark.version === ENOCH_ES_VERSION) setEnochLanguage("es");
+    }
+    return baseOpenBookmark(id);
+  };
+
+  const baseOpenNoteFromIndex = openNoteFromIndex;
+  openNoteFromIndex = function openNoteFromIndexWithEnochLanguage(key) {
+    const parsed = parseStudyKey(key);
+    if (parsed && isEnochBook(parsed.book)) {
+      if (parsed.version === ENOCH_EN_VERSION) setEnochLanguage("en");
+      if (parsed.version === ENOCH_ES_VERSION) setEnochLanguage("es");
+    }
+    return baseOpenNoteFromIndex(key);
+  };
+
   // Los listeners originales de Buscar/Capítulo capturaron la función anterior.
   // En los libros antiguos interceptamos antes de que ese listener se ejecute.
   const searchButton = document.getElementById("searchBtn");
@@ -515,5 +732,7 @@
     }, true);
   }
 
+  enochLanguageToggleElement();
+  refreshEnochLanguageToggle();
   renderNotesIndex();
 })(typeof globalThis !== "undefined" ? globalThis : window);

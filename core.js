@@ -95,7 +95,7 @@
     if (typeof document === "undefined") return;
     if (document.querySelector('script[data-readbible-apocrypha="1"]')) return;
     const script = document.createElement("script");
-    script.src = "apocrypha.js?v=1";
+    script.src = "apocrypha.js?v=2";
     script.async = false;
     script.dataset.readbibleApocrypha = "1";
     document.body.appendChild(script);

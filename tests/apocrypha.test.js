@@ -32,10 +32,23 @@ describe("libros antiguos y apocrifos", () => {
     expect(apocrypha.verseCountFromMap(verses)).toBe(3);
   });
 
-  it("publica la extension en el cache de la PWA", async () => {
+  it("parsea el formato TSV de la traduccion propia", () => {
+    const chapters = apocrypha.parseEnochTsv(
+      "# comentario\n1:1\tPrimer versiculo.\n1:2\tSegundo versiculo.\n2:1\tOtro capitulo.\n"
+    );
+    expect(chapters[1][1]).toBe("Primer versiculo.");
+    expect(chapters[1][2]).toBe("Segundo versiculo.");
+    expect(chapters[2][1]).toBe("Otro capitulo.");
+    expect(apocrypha.spanishFileForChapter(108).path).toBe("data/enoch-es-91-108.tsv");
+  });
+
+  it("publica la extension y el texto espanol en el cache de la PWA", async () => {
     const sw = await readFile("service-worker.js", "utf8");
-    expect(sw).toContain('bibleapp-pwa-v117');
-    expect(sw).toContain('"./core.js?v=3"');
-    expect(sw).toContain('"./apocrypha.js?v=1"');
+    expect(sw).toContain('bibleapp-pwa-v118');
+    expect(sw).toContain('"./core.js?v=4"');
+    expect(sw).toContain('"./apocrypha.js?v=2"');
+    for (const file of apocrypha.ENOCH_ES_FILES) {
+      expect(sw).toContain(`"./${file.url}"`);
+    }
   });
 });
