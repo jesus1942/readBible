@@ -1,9 +1,10 @@
-const CACHE_NAME = "bibleapp-pwa-v116";
+const CACHE_NAME = "bibleapp-pwa-v117";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css?v=3",
-  "./core.js?v=2",
+  "./core.js?v=3",
+  "./apocrypha.js?v=1",
   "./net.js?v=2",
   "./auth.js?v=2",
   "./app.js?v=92",
@@ -39,6 +40,17 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin) return;
+
+  // index.html aun solicita core.js?v=2. Al activar esta version, servimos la
+  // revision v3 desde el cache para cargar la extension sin tocar el HTML.
+  if (requestUrl.pathname.endsWith("/core.js")) {
+    const currentCore = new URL("./core.js?v=3", self.location.href).href;
+    event.respondWith(
+      caches.match(currentCore).then((cached) => cached || fetch(event.request))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) =>
       cached || fetch(event.request).catch(() => cached)
