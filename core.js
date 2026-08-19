@@ -88,4 +88,24 @@
   if (typeof module !== "undefined" && module.exports) {
     module.exports = api;
   }
+
+  // La extension de libros antiguos se carga despues de app.js para poder
+  // reutilizar el buscador, el selector, marcadores, notas y navegacion.
+  function loadAncientBooksExtension() {
+    if (typeof document === "undefined") return;
+    if (document.querySelector('script[data-readbible-apocrypha="1"]')) return;
+    const script = document.createElement("script");
+    script.src = "apocrypha.js?v=1";
+    script.async = false;
+    script.dataset.readbibleApocrypha = "1";
+    document.body.appendChild(script);
+  }
+
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", loadAncientBooksExtension, { once: true });
+    } else {
+      loadAncientBooksExtension();
+    }
+  }
 })(typeof globalThis !== "undefined" ? globalThis : window);
