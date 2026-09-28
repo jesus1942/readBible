@@ -1,4 +1,4 @@
-const CACHE_NAME = "bibleapp-pwa-v119";
+const CACHE_NAME = "bibleapp-pwa-v120";
 const ASSETS = [
   "./",
   "./index.html",
@@ -7,7 +7,7 @@ const ASSETS = [
   "./apocrypha.js?v=2",
   "./net.js?v=2",
   "./auth.js?v=2",
-  "./app.js?v=94",
+  "./app.js?v=95",
   "./ui.js?v=3",
   "./assets/bibleapp-icon-minimal.svg",
   "./assets/ui/support.svg",

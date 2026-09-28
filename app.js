@@ -3673,6 +3673,7 @@ addListener(document.getElementById("nextBtn"), "click", goNext);
 addListener(document.getElementById("zenBtn"), "click", openZen);
 addListener(chapterBtn, "click", fetchChapter);
 addListener(zenClose, "click", closeZen);
+addListener(document.getElementById("zenShare"), "click", () => shareVerseAsPng());
 addListener(document.getElementById("zenProject"), "click", openProjection);
 // touchend directo sobre cada boton — imprescindible en iOS donde el handler
 // del overlay padre no recibe el toque correctamente sobre elementos hijos
@@ -5736,6 +5737,15 @@ async function renderHomeCards() {
   }
   dailyCardRef.textContent = reference ? `${reference} (${DAILY_VERSION})` : "";
   dailyCard.hidden = false;
+  const dailyCardShare = document.getElementById("dailyCardShare");
+  if (dailyCardShare) {
+    dailyCardShare.hidden = !verseText;
+    // Compartir el diario no debe depender del pasaje abierto en el lector.
+    dailyCardShare.onclick = () => shareVerseAsPng({
+      text: verseText,
+      reference: reference ? `${reference} (${DAILY_VERSION})` : ""
+    });
+  }
   if (dailyCardOpen) {
     dailyCardOpen.hidden = !reference;
     dailyCardOpen.onclick = () => {
@@ -6108,15 +6118,16 @@ function dayOfYearIndex() {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
-function shareVerseAsPng() {
-  if (resultEl.hidden) return;
+function shareVerseAsPng(verse = null) {
+  if (!verse && resultEl.hidden) return;
+  const text = (verse ? verse.text : verseEl.textContent).trim();
+  const reference = (verse ? verse.reference : refEl.textContent).trim();
+  if (!text) return;
   const now = Date.now();
   if (now - lastShareAt < 2000) return;
   lastShareAt = now;
   trackEvent("share_png");
 
-  const text = verseEl.textContent.trim();
-  const reference = refEl.textContent.trim();
   const canvas = document.createElement("canvas");
   const scale = 2;
   const width = 1080;
@@ -6157,7 +6168,8 @@ function shareVerseAsPng() {
       try {
         await navigator.share({ files: [file], title: "BibleApp" });
         return;
-      } catch {
+      } catch (error) {
+        if (error.name === "AbortError") return;
         // fall back to download
       }
     }

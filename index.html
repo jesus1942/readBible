@@ -93,6 +93,7 @@
           <p id="dailyCardText" class="daily-home-text"></p>
           <p id="dailyCardRef" class="daily-home-ref"></p>
           <button id="dailyCardOpen" class="ghost" type="button">Leer en su contexto</button>
+          <button id="dailyCardShare" class="ghost" type="button" hidden>Compartir versículo del día</button>
         </div>
         <div class="home-actions">
           <button id="homeDevotionalBtn" class="home-action-btn" type="button">Mi devocional</button>
@@ -156,10 +157,11 @@
         <p id="zenRef"></p>
       </div>
       <div class="zen-controls">
+        <button id="zenShare" class="zen-ctrl-btn" type="button">Compartir</button>
         <button id="zenProject" class="zen-ctrl-btn" aria-label="Proyectar en pantalla grande">Proyectar</button>
         <button id="zenClose" class="btn-close zen-close" aria-label="Cerrar">✕</button>
       </div>
-      <p class="zen-swipe-hint">desliza izquierda / derecha para navegar</p>
+      <p class="zen-swipe-hint">Deslizá izquierda / derecha para navegar; hacia arriba para compartir.</p>
     </div>
 
     <div id="projectionOverlay" class="proj-overlay" hidden>
@@ -743,7 +745,7 @@
     <script src="core.js?v=4"></script>
     <script src="net.js?v=2"></script>
     <script src="auth.js?v=2"></script>
-    <script src="app.js?v=94"></script>
+    <script src="app.js?v=95"></script>
     <script src="ui.js?v=3"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
