@@ -16,3 +16,18 @@ describe("empaquetado Capacitor", () => {
     await Promise.all(scripts.map((src) => access(`www/${src}`)));
   });
 });
+
+describe("recursos de lectura sin conexión", () => {
+  it("empaqueta la extensión dinámica y los 108 capítulos de Enoc", async () => {
+    await execFileAsync(process.execPath, ["scripts/build-www.mjs"], { cwd: process.cwd() });
+    const { createRequire } = await import("node:module");
+    const require = createRequire(import.meta.url);
+    const apocrypha = require("../apocrypha.js");
+    await access("www/apocrypha.js");
+    const chapters = {};
+    for (const file of apocrypha.ENOCH_ES_FILES) {
+      Object.assign(chapters, apocrypha.parseEnochTsv(await readFile(`www/${file.path}`, "utf8")));
+    }
+    expect(Object.keys(chapters)).toHaveLength(108);
+  });
+});

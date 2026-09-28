@@ -3,12 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0f1412" />
+    <meta name="theme-color" content="#f7f4ee" />
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180" />
     <title>Lectura Viva</title>
-    <link rel="stylesheet" href="styles.css?v=3" />
+    <link rel="stylesheet" href="styles.css?v=6" />
   </head>
   <body>
     <!-- SVG filter for hand-drawn button edges (scale reducido a 0.8 para que sea sutil) -->
@@ -21,16 +21,71 @@
       </defs>
     </svg>
 
+    <a class="skip-link" href="#readingArea">Ir a la lectura</a>
+    <aside class="workspace-nav" aria-label="Navegación principal">
+      <a class="brand" href="./"><img src="assets/bibleapp-icon-minimal.svg" alt="" /><span>Lectura Viva<small>Tu espacio en la Palabra</small></span></a>
+      <p class="nav-caption">BIBLIOTECA</p>
+      <nav>
+        <button data-ui-action="read" class="nav-item is-current" type="button">Leer</button>
+        <button data-ui-action="books" class="nav-item" type="button">Libros</button>
+        <button data-ui-action="search" class="nav-item" type="button">Buscar</button>
+        <button data-ui-action="notes" class="nav-item" type="button">Mis notas</button>
+        <button data-ui-action="bookmarks" class="nav-item" type="button">Marcadores</button>
+      </nav>
+      <p class="nav-caption">MI ESPACIO</p>
+      <nav>
+        <button id="floatDevotionalBtn" class="nav-item" type="button">Devocional</button>
+        <button data-ui-action="community" class="nav-item" type="button">Comunidad</button>
+        <button data-ui-action="projection" class="nav-item" type="button">Proyección</button>
+        <button data-ui-action="settings" class="nav-item" type="button">Ajustes y cuenta</button>
+      </nav>
+      <div class="nav-support"><p>Un proyecto que crece con vos.</p><button data-ui-action="support" class="ghost" type="button">Colaborar</button></div>
+    </aside>
     <main class="app">
       <header class="hero">
         <div>
           <p class="eyebrow">Lectura Viva</p>
           <div id="homeGreeting" class="home-greeting" hidden></div>
-          <h1 id="homeTitle">Versiculos vivos, lectura plena.</h1>
-          <p id="homeSubtitle" class="subtitle">Busqueda rapida, lectura plena y referencias destacadas.</p>
+          <h1 id="homeTitle">Un momento con la Palabra.</h1>
+          <p id="homeSubtitle" class="subtitle">Leé, explorá y guardá lo que habla a tu corazón.</p>
         </div>
         <button id="menuBtn" class="menu-btn" aria-label="Abrir menu">&#9776;</button>
       </header>
+
+      <section class="card search" aria-label="Buscar en la Biblia">
+        <div class="search-heading"><span class="section-kicker">EXPLORÁ LA PALABRA</span><button data-ui-action="books" class="text-button" type="button">Todos los libros</button></div>
+        <div class="search-modes" role="group" aria-label="Forma de búsqueda"><button type="button" data-search-mode="reference" aria-pressed="true">Referencia</button><button type="button" data-search-mode="text" aria-pressed="false">Palabra o frase</button></div>
+        <div class="field">
+          <label id="queryLabel" for="query">Libro, capítulo y versículo</label>
+          <input id="query" type="text" placeholder="Ej. Juan 3:16 o Salmos 23:1-6" />
+          <button id="pickerBtn" class="ghost picker-btn" type="button">Selector de referencia</button>
+          <div id="querySuggestions" class="suggestions" hidden></div>
+        </div>
+        <div class="field">
+          <label for="version">Versión</label>
+          <select id="version"></select>
+        </div>
+        <div class="actions">
+          <button id="searchBtn">Buscar</button>
+          <button id="prevBtn" class="ghost">Anterior</button>
+          <button id="nextBtn" class="ghost">Siguiente</button>
+          <button id="chapterBtn" class="ghost">Capitulo completo</button>
+        </div>
+      </section>
+
+      <section id="readingArea" class="card output" tabindex="-1" aria-label="Lectura">
+        <div class="reading-heading"><div><p class="section-kicker">TU LECTURA</p><h2 id="readingTitle">La Palabra, cerca tuyo.</h2></div><div class="reading-tools"><button id="zenBtn" class="ghost" type="button" aria-label="Lectura plena">Ampliar</button><button id="readerSmaller" class="ghost" type="button" aria-label="Reducir tamaño del texto">A−</button><button id="readerLarger" class="ghost" type="button" aria-label="Aumentar tamaño del texto">A+</button><button id="readerNote" class="ghost" type="button" disabled>Agregar nota</button></div></div>
+        <div id="status" class="status" role="status" aria-live="polite">Elegí un libro o buscá una referencia para comenzar.</div>
+        <div id="result" class="result" hidden>
+          <p id="verseText" class="verse"></p>
+          <p class="reference">
+            <span id="reference"></span>
+            <button id="bookmarkBtn" class="bookmark-btn" type="button" aria-label="Guardar marcador" hidden><img src="assets/ui/bookmarks.svg" width="20" height="20" alt="" /></button>
+            <button id="studyDot" class="study-dot" type="button" aria-label="Abrir estudio" hidden></button>
+          </p>
+          <button id="resultDevotionalBtn" class="ghost" type="button" hidden>Hacer devocional de este pasaje</button>
+        </div>
+      </section>
 
       <section id="homeCards" class="home-cards" hidden>
         <div id="dailyCard" class="card daily-home-card" hidden>
@@ -55,46 +110,14 @@
         </div>
       </section>
 
-      <section class="card search">
-        <div class="field">
-          <label for="query">Referencia</label>
-          <input id="query" type="text" placeholder="Juan 3:16" />
-          <button id="pickerBtn" class="ghost picker-btn" type="button">Elegir con rueda</button>
-          <div id="querySuggestions" class="suggestions" hidden></div>
-        </div>
-        <div class="field">
-          <label for="version">Version</label>
-          <select id="version"></select>
-        </div>
-        <div class="actions">
-          <button id="searchBtn">Buscar</button>
-          <button id="prevBtn" class="ghost">Anterior</button>
-          <button id="nextBtn" class="ghost">Siguiente</button>
-          <button id="zenBtn" class="ghost">Lectura plena</button>
-          <button id="chapterBtn" class="ghost">Capitulo completo</button>
-        </div>
-      </section>
-
-      <section class="card output">
-        <div id="status" class="status">Ingresa una referencia para buscar.</div>
-        <div id="result" class="result" hidden>
-          <p id="verseText" class="verse"></p>
-          <p class="reference">
-            <span id="reference"></span>
-            <button id="bookmarkBtn" class="bookmark-btn" type="button" aria-label="Guardar marcador" hidden>🔖</button>
-            <button id="studyDot" class="study-dot" type="button" aria-label="Abrir estudio" hidden></button>
-          </p>
-          <button id="resultDevotionalBtn" class="ghost" type="button" hidden>Hacer devocional de este pasaje</button>
-        </div>
-      </section>
-
       <footer class="footer">
         <canvas class="footer-flame-canvas" aria-hidden="true"></canvas>
-        <nav class="footer-nav" aria-label="Navegacion rapida">
-          <button id="floatHomeBtn" class="footer-nav-btn" type="button">Inicio</button>
+        <nav class="footer-nav" aria-label="Navegación rápida">
+          <button id="floatHomeBtn" class="footer-nav-btn is-current" type="button">Leer</button>
+          <button data-ui-action="books" class="footer-nav-btn" type="button">Libros</button>
           <button id="floatSearchBtn" class="footer-nav-btn" type="button">Buscar</button>
-          <button id="floatDevotionalBtn" class="footer-nav-btn" type="button">Devocional</button>
-          <button id="floatMenuBtn" class="footer-nav-btn" type="button">Menu</button>
+          <button data-ui-action="notes" class="footer-nav-btn" type="button">Notas</button>
+          <button id="floatMenuBtn" class="footer-nav-btn" type="button">Más</button>
         </nav>
         <div class="footer-bottom">
           <span class="footer-credit">Creada por <a href="https://wa.me/5492804018359?text=Hola%20Jesus%2C%20gracias%20por%20la%20app" target="_blank" rel="noopener">Jesus Olguin</a>.</span>
@@ -106,6 +129,26 @@
       </footer>
 
     </main>
+
+    <dialog id="libraryDialog" class="library-dialog" aria-labelledby="libraryTitle">
+      <div class="dialog-heading"><div><p class="section-kicker">BIBLIOTECA</p><h2 id="libraryTitle">Elegí tu próxima lectura</h2></div><button class="btn-close" data-dialog-close type="button" aria-label="Cerrar libros">✕</button></div>
+      <div class="library-tabs" role="group" aria-label="Colección de libros"><button data-collection="old" aria-pressed="true" type="button">Antiguo Testamento</button><button data-collection="new" aria-pressed="false" type="button">Nuevo Testamento</button><button data-collection="ancient" aria-pressed="false" type="button">Apócrifos y otros</button></div>
+      <label class="sr-only" for="bookFilter">Filtrar libros</label><input id="bookFilter" placeholder="Buscar un libro…" type="search" />
+      <div id="libraryBooks" class="library-books"></div>
+      <section id="libraryChapters" hidden><button id="libraryBack" class="text-button" type="button">Volver a los libros</button><h3 id="libraryBookTitle"></h3><p class="status">Elegí un capítulo para leer.</p><div id="chapterGrid" class="chapter-grid"></div></section>
+      <p id="librarySource" class="status"></p>
+      <button id="libraryWheel" class="ghost" type="button">Elegir libro, capítulo y versículo con rueda</button>
+    </dialog>
+    <dialog id="supportDialog" class="support-dialog" aria-labelledby="supportTitle" aria-describedby="supportDescription">
+      <button class="btn-close" data-dialog-close type="button" aria-label="Cerrar colaboración">✕</button>
+      <span class="support-mark" aria-hidden="true"><img src="assets/ui/support.svg" width="26" height="26" alt="" /></span>
+      <p class="section-kicker">HECHO CON DEDICACIÓN</p>
+      <h2 id="supportTitle">Ayudá a crecer a Lectura Viva</h2>
+      <p id="supportDescription">Tu colaboración apoya al desarrollador y ayuda a mejorar la app, mantener sus funciones y sumar nuevas herramientas.</p>
+      <p class="support-thanks">Gracias por acompañar este proyecto.</p>
+      <a id="supportPayment" class="btn-donation" target="_blank" rel="noopener">Colaborar con Mercado Pago</a>
+      <button class="text-button" data-dialog-close type="button">Cerrar</button>
+    </dialog>
 
     <div id="zenOverlay" class="zen" hidden>
       <div class="zen-content">
@@ -194,7 +237,10 @@
           <button id="menuClose" class="btn-close" aria-label="Cerrar menu">✕</button>
         </div>
         <div class="side-menu-about">
-          <p class="eyebrow">Acciones</p>
+          <p class="eyebrow">Tu espacio</p>
+          <button data-ui-action="books" class="ghost" type="button">Libros y apócrifos</button>
+          <button data-ui-action="devotional" class="ghost" type="button">Mi devocional</button>
+          <button data-ui-action="projection" class="ghost" type="button">Proyección</button>
           <button id="helpOpen" class="ghost">Ayuda guiada</button>
           <button id="communityOpen" class="ghost">Configurar comunidad</button>
           <button id="checkUpdateBtn" class="ghost">Buscar actualizaciones</button>
@@ -694,10 +740,11 @@
       data-website-id="76cecf2a-92bb-43d2-ae8f-053da8117110"
       data-host-url="https://umami-production-b559.up.railway.app"
     ></script>
-    <script src="core.js?v=2"></script>
+    <script src="core.js?v=4"></script>
     <script src="net.js?v=2"></script>
     <script src="auth.js?v=2"></script>
-    <script src="app.js?v=92"></script>
+    <script src="app.js?v=94"></script>
+    <script src="ui.js?v=3"></script>
     <script>
       const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
       const canRegister = location.protocol === "https:" || isLocalhost;

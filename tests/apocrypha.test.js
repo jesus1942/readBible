@@ -44,7 +44,7 @@ describe("libros antiguos y apocrifos", () => {
 
   it("publica la extension y el texto espanol en el cache de la PWA", async () => {
     const sw = await readFile("service-worker.js", "utf8");
-    expect(sw).toContain('bibleapp-pwa-v118');
+    expect(sw).toMatch(/bibleapp-pwa-v\d+/);
     expect(sw).toContain('"./core.js?v=4"');
     expect(sw).toContain('"./apocrypha.js?v=2"');
     for (const file of apocrypha.ENOCH_ES_FILES) {

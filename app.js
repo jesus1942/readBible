@@ -1,4 +1,4 @@
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.5.0";
 
 const versions = [
   "RVR1960", "RVC", "NVI", "NBLA", "LBLA", "NTV",
@@ -1729,7 +1729,7 @@ function initFooterNav() {
   const floatDevotionalBtn = document.getElementById("floatDevotionalBtn");
   if (floatHomeBtn) {
     floatHomeBtn.addEventListener("click", () => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      document.getElementById("readingArea")?.scrollIntoView({ block: "start", behavior: "smooth" });
     });
   }
   if (floatSearchBtn) {
@@ -1755,6 +1755,7 @@ function initFooterNav() {
 function initFooterFlame() {
   const canvas = document.querySelector(".footer-flame-canvas");
   if (!canvas) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const ctx = canvas.getContext("2d");
   const COLORS = ["#f39c12", "#c0641a", "#7a1a0a", "#f5c96b", "#e07828", "#a03010", "#6b2008"];
   const particles = [];
@@ -2966,12 +2967,17 @@ const projRefEl = document.getElementById("projRef");
 const projControlsEl = document.getElementById("projControls");
 
 function openProjection() {
+  if (window.matchMedia("(max-width: 719px)").matches) {
+    const dialog = document.getElementById("supportDialog");
+    if (dialog && !dialog.open) dialog.showModal();
+    return;
+  }
   const verseText = (isZenOpen ? zenText?.textContent : null)
     || document.getElementById("verseText")?.textContent || "";
   const rawRef = (isZenOpen ? zenRef?.textContent : null)
     || document.getElementById("reference")?.textContent || "";
   const refText = rawRef.replace(/^[—\s]+/, "");
-  if (!verseText) return;
+  if (!verseText) { showStatus("Abrí un pasaje antes de proyectar.", false); return; }
 
   if (projTextEl) projTextEl.textContent = verseText;
   if (projRefEl) projRefEl.textContent = `— ${refText}`;

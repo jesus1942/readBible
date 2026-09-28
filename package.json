@@ -1,6 +1,6 @@
 {
   "name": "readbible",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "description": "ReadBible PWA",
   "scripts": {
@@ -9,12 +9,14 @@
     "build:www": "node scripts/build-www.mjs",
     "sync": "npm run build:www && cap sync",
     "open:android": "cap open android",
-    "open:ios": "cap open ios"
+    "open:ios": "cap open ios",
+    "dev": "vite"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.4.0",
     "@playwright/test": "^1.58.2",
-    "vitest": "^1.6.0"
+    "vitest": "^1.6.0",
+    "vite": "^5.4.21"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.0",
